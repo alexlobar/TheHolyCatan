@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#b5462a">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Catán">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>Catán Tracker</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="icon" href="icons/favicon-32.png" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" sizes="180x180">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>⬡ Catán Tracker</h1>
+  </header>
+
+  <main>
+    <!-- ============ TRACKER ============ -->
+    <section id="view-tracker" class="view active">
+      <div class="card">
+        <h2>Registrar partida</h2>
+        <form id="game-form">
+          <fieldset>
+            <legend>¿Quién ha jugado?</legend>
+            <div id="participants" class="chip-group"></div>
+          </fieldset>
+          <fieldset>
+            <legend>¿Quién ha ganado?</legend>
+            <div id="winner" class="chip-group"></div>
+          </fieldset>
+          <label class="field">
+            Fecha
+            <input type="date" id="game-date" required>
+          </label>
+          <label class="field">
+            Nota (opcional)
+            <input type="text" id="game-note" maxlength="80" placeholder="Ej: remontada épica con el puerto 2:1">
+          </label>
+          <button type="submit" class="btn primary">Guardar partida</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Clasificación</h2>
+        <div class="table-wrap">
+          <table class="stats">
+            <thead>
+              <tr><th>Jugador</th><th>PJ</th><th>V</th><th>D</th><th>% V</th></tr>
+            </thead>
+            <tbody id="stats-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Historial</h2>
+        <ul id="history" class="history"></ul>
+      </div>
+    </section>
+
+    <!-- ============ TABLAS DE CARTAS ============ -->
+    <section id="view-tables" class="view">
+      <div id="deck-switch" class="deck-switch" role="tablist" aria-label="Tabla de cartas"></div>
+
+      <div id="mesa-card" class="card">
+        <h2 id="mesa-title" class="mesa-title"></h2>
+        <p id="mesa-subtitle" class="subtitle"></p>
+        <p class="muted">5 cartas al azar del mazo para esta partida. Pulsa ↻ para cambiar solo una.</p>
+        <ol id="table-list" class="table-list"></ol>
+        <div class="row">
+          <button id="table-shuffle" class="btn primary big">🎲 Nueva mesa</button>
+          <button id="table-pick" class="btn">🎴 Robar 1 de la mesa</button>
+        </div>
+        <div id="holy-result" class="holy-result center" aria-live="polite"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Mazo de cartas</h2>
+          <span id="deck-count" class="muted"></span>
+        </div>
+        <p class="muted">Todas las cartas de esta tabla. Solo las activas entran en el sorteo. Se guardan solas.</p>
+        <button id="card-add" class="btn add">＋ Añadir carta</button>
+        <ol id="deck-list" class="holy-list"></ol>
+      </div>
+    </section>
+
+    <!-- ============ AJUSTES ============ -->
+    <section id="view-settings" class="view">
+      <div class="card">
+        <h2>Copia de seguridad</h2>
+        <p class="muted">Los datos viven en el navegador (localStorage). Exporta para no perderlos o pasarlos a otro móvil.</p>
+        <div class="row">
+          <button id="export-btn" class="btn">⬇ Exportar JSON</button>
+          <label class="btn">
+            ⬆ Importar JSON
+            <input type="file" id="import-file" accept="application/json" hidden>
+          </label>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Zona peligrosa</h2>
+        <button id="reset-games" class="btn danger">Borrar historial de partidas</button>
+        <button id="reset-decks" class="btn danger">Restaurar tablas originales</button>
+      </div>
+    </section>
+  </main>
+
+  <nav class="tabbar">
+    <button data-view="tracker" class="active"><span>🏆</span>Tracker</button>
+    <button data-view="tables"><span>🎴</span>Tablas</button>
+    <button data-view="settings"><span>⚙️</span>Ajustes</button>
+  </nav>
+
+  <div id="toast" class="toast" role="status"></div>
+
+  <script src="js/storage.js"></script>
+  <script src="js/tracker.js"></script>
+  <script src="js/tables.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
