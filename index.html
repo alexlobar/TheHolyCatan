@@ -51,11 +51,12 @@
         <div class="table-wrap">
           <table class="stats">
             <thead>
-              <tr><th>Jugador</th><th>PJ</th><th>V</th><th>D</th><th>% V</th></tr>
+              <tr><th>Jugador</th><th>PJ</th><th>V</th><th>% V</th></tr>
             </thead>
             <tbody id="stats-body"></tbody>
           </table>
         </div>
+        <p class="legend">🥇 🥈 🥉 podio · 🪵 cuchara de madera</p>
       </div>
 
       <div class="card">
@@ -64,28 +65,27 @@
       </div>
     </section>
 
-    <!-- ============ TABLAS DE CARTAS ============ -->
+    <!-- ============ HOLY TABLE ============ -->
     <section id="view-tables" class="view">
-      <div id="deck-switch" class="deck-switch" role="tablist" aria-label="Tabla de cartas"></div>
-
       <div id="mesa-card" class="card">
-        <h2 id="mesa-title" class="mesa-title"></h2>
-        <p id="mesa-subtitle" class="subtitle"></p>
-        <p class="muted">5 cartas al azar del mazo para esta partida. Pulsa ↻ para cambiar solo una.</p>
-        <ol id="table-list" class="table-list"></ol>
-        <div class="row">
-          <button id="table-shuffle" class="btn primary big">🎲 Nueva mesa</button>
-          <button id="table-pick" class="btn">🎴 Robar 1 de la mesa</button>
+        <h2>Habilidades de la partida</h2>
+        <p class="muted">Cada carta de color recibe una habilidad al azar de las tablas elegidas. Pulsa ↻ para cambiar solo un color.</p>
+        <div class="draw-from">
+          <span class="draw-label">Tablas en juego:</span>
+          <div id="draw-tables" class="chip-group"></div>
         </div>
-        <div id="holy-result" class="holy-result center" aria-live="polite"></div>
+        <ol id="table-list" class="table-list"></ol>
+        <button id="table-shuffle" class="btn primary big">🎲 Nueva partida</button>
       </div>
 
-      <div class="card">
+      <div id="deck-card" class="card">
+        <div id="deck-switch" class="deck-switch" role="tablist" aria-label="Mazo a editar"></div>
         <div class="card-head">
-          <h2>Mazo de cartas</h2>
+          <h2 id="deck-title" class="deck-title"></h2>
           <span id="deck-count" class="muted"></span>
         </div>
-        <p class="muted">Todas las cartas de esta tabla. Solo las activas entran en el sorteo. Se guardan solas.</p>
+        <p id="deck-subtitle" class="subtitle"></p>
+        <p class="muted">Solo las cartas activas entran en el sorteo. Los cambios se guardan solos.</p>
         <button id="card-add" class="btn add">＋ Añadir carta</button>
         <ol id="deck-list" class="holy-list"></ol>
       </div>
@@ -93,6 +93,11 @@
 
     <!-- ============ AJUSTES ============ -->
     <section id="view-settings" class="view">
+      <div class="card">
+        <h2>Instalar en el móvil</h2>
+        <p id="install-status" class="muted"></p>
+        <button id="install-btn" class="btn primary" hidden>📲 Instalar app</button>
+      </div>
       <div class="card">
         <h2>Copia de seguridad</h2>
         <p class="muted">Los datos viven en el navegador (localStorage). Exporta para no perderlos o pasarlos a otro móvil.</p>
@@ -114,7 +119,7 @@
 
   <nav class="tabbar">
     <button data-view="tracker" class="active"><span>🏆</span>Tracker</button>
-    <button data-view="tables"><span>🎴</span>Tablas</button>
+    <button data-view="tables"><span>🎴</span>Holy Table</button>
     <button data-view="settings"><span>⚙️</span>Ajustes</button>
   </nav>
 

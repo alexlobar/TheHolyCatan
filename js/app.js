@@ -9,6 +9,45 @@ const App = (() => {
     Tables.init();
     initTabs();
     initSettings();
+    initInstall();
+  }
+
+  // Instalación como app: service worker (offline) + botón en Android + instrucciones en iOS.
+  function initInstall() {
+    if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+      navigator.serviceWorker.register('./sw.js').catch(e => console.warn('Service worker no registrado', e));
+    }
+
+    const status = $('#install-status');
+    const btn = $('#install-btn');
+    const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+    const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+    if (standalone) {
+      status.textContent = '✔ Ya estás usando la app instalada.';
+    } else if (ios) {
+      status.innerHTML = 'iPhone / iPad: abre esta página en <b>Safari</b>, pulsa <b>Compartir</b> (el cuadrado con la flecha ↑) y elige <b>Añadir a pantalla de inicio</b>.';
+    } else {
+      status.innerHTML = 'Android: en Chrome, abre el menú <b>⋮</b> → <b>Instalar aplicación</b> (o <b>Añadir a pantalla de inicio</b>). Si aparece el botón de abajo, también sirve.';
+    }
+
+    let deferred = null;
+    window.addEventListener('beforeinstallprompt', e => {
+      e.preventDefault();
+      deferred = e;
+      btn.hidden = false;
+    });
+    btn.addEventListener('click', async () => {
+      if (!deferred) return;
+      btn.hidden = true;
+      deferred.prompt();
+      await deferred.userChoice;
+      deferred = null;
+    });
+    window.addEventListener('appinstalled', () => {
+      btn.hidden = true;
+      status.textContent = '✔ App instalada. Ábrela desde la pantalla de inicio.';
+    });
   }
 
   function initTabs() {

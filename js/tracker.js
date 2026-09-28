@@ -65,45 +65,66 @@ const Tracker = (() => {
 
   function computeStats() {
     const { players, games } = Storage.get();
-    const stats = Object.fromEntries(players.map(p => [p, { played: 0, wins: 0, losses: 0 }]));
+    const stats = Object.fromEntries(players.map(p => [p, { played: 0, wins: 0 }]));
     for (const g of games) {
       for (const p of g.players) {
         if (!stats[p]) continue;
         stats[p].played++;
-        g.winner === p ? stats[p].wins++ : stats[p].losses++;
+        if (g.winner === p) stats[p].wins++;
       }
     }
-    return players
+    const rows = players
       .map(p => ({ name: p, ...stats[p], pct: stats[p].played ? stats[p].wins / stats[p].played : 0 }))
       .sort((a, b) => b.wins - a.wins || b.pct - a.pct);
+    // Posición con empates compartidos (1, 1, 3, 4): mismas victorias y mismo % = mismo puesto.
+    rows.forEach((r, i) => {
+      const prev = rows[i - 1];
+      r.rank = prev && prev.wins === r.wins && prev.pct === r.pct ? prev.rank : i + 1;
+    });
+    return rows;
   }
+
+  // 🥇🥈🥉 y la cuchara de madera 🪵 para el último puesto.
+  const MEDALS = ['🥇', '🥈', '🥉', '🪵'];
 
   function render() {
     const rows = computeStats();
-    const topWins = rows[0]?.wins || 0;
+    const games = Storage.get().games;
     $('#stats-body').innerHTML = rows.map(r => `
-      <tr class="${topWins && r.wins === topWins ? 'leader' : ''}">
-        <td>${esc(r.name)}</td>
+      <tr class="rank-${r.rank}">
+        <td><span class="medal">${games.length ? MEDALS[Math.min(r.rank, MEDALS.length) - 1] : ''}</span>${esc(r.name)}</td>
         <td>${r.played}</td>
-        <td>${r.wins}</td>
-        <td>${r.losses}</td>
+        <td class="roman">${toRoman(r.wins)}</td>
         <td>${Math.round(r.pct * 100)}%</td>
       </tr>`).join('');
 
-    const games = Storage.get().games;
     const list = $('#history');
     if (!games.length) {
       list.innerHTML = '<li class="empty">Aún no hay partidas. ¡A colonizar!</li>';
       return;
     }
-    list.innerHTML = games.map(g => `
-      <li>
+    // Las partidas se guardan de la más nueva a la más antigua; el número es el orden de registro.
+    list.innerHTML = games.map((g, i) => {
+      const d = g.date ? new Date(g.date + 'T00:00') : null;
+      const others = g.players.filter(p => p !== g.winner);
+      return `
+      <li class="game">
+        <div class="date-badge">
+          <span class="day">${d ? d.getDate() : '?'}</span>
+          <span class="month">${d ? d.toLocaleDateString('es-ES', { month: 'short' }).replace('.', '') : ''}</span>
+          <span class="year">${d ? d.getFullYear() : ''}</span>
+        </div>
         <div class="info">
+          <div class="game-num">Partida ${toRoman(games.length - i)}</div>
           <div class="win">🏆 ${esc(g.winner)}</div>
-          <div class="meta">${formatDate(g.date)} · ${g.players.map(esc).join(', ')}${g.note ? ' · ' + esc(g.note) : ''}</div>
+          <div class="players">
+            ${others.map(p => `<span class="tag">${esc(p)}</span>`).join('')}
+          </div>
+          ${g.note ? `<blockquote class="note">${esc(g.note)}</blockquote>` : ''}
         </div>
         <button class="del" data-id="${g.id}" aria-label="Borrar partida">🗑️</button>
-      </li>`).join('');
+      </li>`;
+    }).join('');
     list.querySelectorAll('.del').forEach(b => b.addEventListener('click', () => removeGame(b.dataset.id)));
   }
 
@@ -126,7 +147,14 @@ const Tracker = (() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   };
-  const formatDate = d => d ? new Date(d + 'T00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+  // 0 no existe en romanos: se muestra un guion.
+  function toRoman(n) {
+    if (!n) return '—';
+    const map = [[1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'], [100, 'C'], [90, 'XC'], [50, 'L'], [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']];
+    let out = '';
+    for (const [v, s] of map) while (n >= v) { out += s; n -= v; }
+    return out;
+  }
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   return { init, render, resetForm, clearAll, esc };

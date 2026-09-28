@@ -13,6 +13,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 
 html, body { margin: 0; }
 
@@ -47,7 +48,6 @@ main {
   #view-tracker.active { grid-template-columns: 1fr 1fr; }
   #view-tracker .card:last-child { grid-column: 1 / -1; }
   #view-tables.active { grid-template-columns: 1fr 1fr; align-items: start; }
-  #view-tables .deck-switch { grid-column: 1 / -1; }
   #mesa-card { position: sticky; top: 72px; }
 }
 
@@ -121,21 +121,77 @@ table.stats { width: 100%; border-collapse: collapse; }
 .stats th, .stats td { padding: 10px 8px; text-align: center; border-bottom: 1px solid var(--line); }
 .stats th:first-child, .stats td:first-child { text-align: left; }
 .stats th { font-size: .8rem; color: var(--muted); text-transform: uppercase; }
-.stats tr.leader td:first-child::after { content: " 👑"; }
-
-.history { list-style: none; padding: 0; margin: 0; }
-.history li {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--line);
+.stats td:first-child { font-weight: 600; white-space: nowrap; }
+.stats .medal { display: inline-block; width: 1.6em; font-size: 1.15rem; }
+.stats tr.rank-1 td { background: #fdf3dc; }
+.stats .roman {
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: 1px;
+  color: var(--brick);
 }
-.history li:last-child { border-bottom: 0; }
+.legend { margin: 8px 0 0; font-size: .8rem; color: var(--muted); text-align: right; }
+
+/* Historial: cada partida como una ficha */
+.history { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.history li.game {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--wheat);
+  border-radius: 12px;
+}
+.date-badge {
+  flex-shrink: 0;
+  width: 54px;
+  padding: 6px 0;
+  border-radius: 10px;
+  background: var(--sea);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.1;
+}
+.date-badge .day { font-size: 1.4rem; font-weight: 800; }
+.date-badge .month { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; }
+.date-badge .year { font-size: .65rem; opacity: .8; }
 .history .info { flex: 1; min-width: 0; }
-.history .win { font-weight: 700; }
-.history .meta { font-size: .85rem; color: var(--muted); overflow-wrap: anywhere; }
-.history .del { background: none; border: 0; font-size: 1.1rem; cursor: pointer; min-width: 44px; min-height: 44px; }
+.history .game-num {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: .8rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.history .win { font-size: 1.15rem; font-weight: 800; margin: 2px 0 6px; overflow-wrap: anywhere; }
+.history .players { display: flex; flex-wrap: wrap; gap: 6px; }
+.history .players:empty { display: none; }
+.tag {
+  font-size: .8rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--sand);
+  border: 1px solid var(--line);
+}
+.history .note {
+  margin: 8px 0 0;
+  padding: 6px 10px;
+  border-left: 3px solid var(--wheat);
+  background: #fdf8ec;
+  border-radius: 0 8px 8px 0;
+  font-style: italic;
+  font-size: .9rem;
+  overflow-wrap: anywhere;
+}
+.history .note::before { content: "“"; }
+.history .note::after { content: "”"; }
+.history .del { background: none; border: 0; font-size: 1.1rem; cursor: pointer; min-width: 44px; min-height: 44px; flex-shrink: 0; }
 .empty { color: var(--muted); font-style: italic; }
 
 .card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
@@ -143,16 +199,17 @@ table.stats { width: 100%; border-collapse: collapse; }
 .row .btn { flex: 1 1 160px; }
 .btn.add { width: 100%; margin-bottom: 12px; border-style: dashed; border-color: var(--accent); color: var(--accent); }
 
-/* Tablas de cartas: cada una con su color */
-#view-tables { --accent: #c9971c; --accent-soft: #fdf3dc; }
-#view-tables[data-deck="martyr"] { --accent: #6b4c9a; --accent-soft: #f1ebf8; }
-#view-tables[data-deck="shit"] { --accent: #7a5230; --accent-soft: #f3e9df; }
+/* Mazos: cada tabla con su color (se aplica al editor según el mazo abierto) */
+#deck-card, .origin-holy { --accent: #c9971c; }
+#deck-card[data-deck="martyr"], .origin-martyr { --accent: #6b4c9a; }
+#deck-card[data-deck="shit"], .origin-shit { --accent: #7a5230; }
 
 .deck-switch {
   display: flex;
   gap: 4px;
   padding: 4px;
-  background: var(--card);
+  margin-bottom: 14px;
+  background: var(--sand);
   border: 1px solid var(--line);
   border-radius: 999px;
 }
@@ -170,46 +227,66 @@ table.stats { width: 100%; border-collapse: collapse; }
 }
 .deck-switch button.active { background: var(--accent); color: #fff; }
 
-.card .mesa-title { color: var(--accent); margin-bottom: 2px; font-size: 1.3rem; }
+.card .deck-title { color: var(--accent); margin-bottom: 2px; font-size: 1.3rem; }
 .subtitle { margin: 0 0 10px; font-style: italic; font-family: Georgia, "Times New Roman", serif; color: var(--muted); font-size: .9rem; }
 
 .pills { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 2px; }
 .pill { font-size: .75rem; font-weight: 700; padding: 3px 8px; border-radius: 999px; }
 .pill.cost { background: #fbe3dd; color: var(--brick); }
 .pill.benefit { background: #dff0e0; color: var(--wood); }
-.holy-result .pills { justify-content: center; margin-top: 6px; }
 
 .extra-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .extra-fields input { font-size: .9rem; }
 
-/* Mesa de la partida: las 5 cartas sorteadas */
-.table-list { list-style: none; padding: 0; margin: 0 0 12px; display: grid; gap: 10px; counter-reset: mesa; }
-.table-list li:not(.empty) {
-  counter-increment: mesa;
+/* Mesa de la partida: una ficha por carta de color */
+.draw-from { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.draw-label { font-weight: 600; font-size: .9rem; }
+.deck-chip { padding: 6px 12px; min-height: 38px; font-size: .9rem; }
+
+.table-list { list-style: none; padding: 0; margin: 0 0 12px; display: grid; gap: 10px; }
+.table-list li.slot {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  padding: 0 10px 0 0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+  border: 2px solid var(--slot);
+}
+.slot-color {
+  flex-shrink: 0;
+  width: 34px;
+  background: var(--slot);
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #fff 0%, var(--accent-soft) 100%);
-  border: 2px solid var(--accent);
+  justify-content: center;
 }
-.table-list li:not(.empty)::before {
-  content: counter(mesa);
+.slot-color span {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  color: #fff;
+  font-size: .7rem;
   font-weight: 800;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+.table-list .info { flex: 1; min-width: 0; padding: 10px 0; }
+.slot-head { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; flex-wrap: wrap; }
+.table-list .name { font-weight: 800; overflow-wrap: anywhere; }
+.origin {
+  font-size: .7rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
   color: #fff;
   background: var(--accent);
-  width: 30px; height: 30px;
-  display: grid; place-items: center;
-  border-radius: 50%;
-  flex-shrink: 0;
+  white-space: nowrap;
 }
-.table-list .info { flex: 1; min-width: 0; }
-.table-list .name { font-weight: 800; overflow-wrap: anywhere; }
 .table-list .desc { font-size: .9rem; color: var(--muted); margin-top: 2px; overflow-wrap: anywhere; }
-.table-list li.picked { box-shadow: 0 0 0 3px var(--accent); }
-.table-list .desc em, .holy-result .desc em { display: block; margin-top: 2px; }
+.table-list .desc em { display: block; margin-top: 2px; }
 .table-list li.flip { animation: flip .45s ease both; }
+.table-list .reroll { align-self: center; }
 .reroll {
   background: #fff;
   border: 1px solid var(--line);
@@ -238,13 +315,6 @@ table.stats { width: 100%; border-collapse: collapse; }
 .holy-list textarea { resize: vertical; min-height: 60px; }
 .toggle { display: flex; align-items: center; gap: 6px; font-size: .85rem; white-space: nowrap; }
 .toggle input { width: 20px; height: 20px; margin: 0; accent-color: var(--wood); }
-
-.holy-result { margin-top: 12px; }
-.holy-result:empty { display: none; }
-.holy-result .name { font-size: 1.4rem; font-weight: 800; color: var(--accent); }
-.holy-result .desc { color: var(--muted); margin-top: 6px; }
-.holy-result.spin { animation: spin .5s ease; }
-@keyframes spin { from { transform: rotate(-8deg) scale(.9); opacity: .3; } to { transform: none; opacity: 1; } }
 
 .tabbar {
   position: fixed;

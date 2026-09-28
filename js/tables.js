@@ -1,143 +1,163 @@
-// Tablas de cartas (Holy, Martyr, Shit): cada una con su mazo ilimitado y, por partida,
-// una "mesa" de 5 cartas distintas sorteadas entre las activas.
+// Holy Table: mesa de la partida con las 5 cartas de colores (cada color recibe una habilidad
+// al azar sacada de las tablas elegidas) + editor de los mazos Holy, Martyr y Shit.
 const Tables = (() => {
   const $ = sel => document.querySelector(sel);
-  const SIZE = 5;
   const CURRENT_KEY = 'catan-app-deck';
-  let current = Storage.TABLES[0].id;
+  const { TABLES, COLORS } = Storage;
+  let current = TABLES[0].id; // mazo abierto en el editor
   let saveTimer;
 
-  const def = () => Storage.TABLES.find(t => t.id === current);
-  const deck = () => Storage.get().decks[current];
-  const byId = id => deck().cards.find(c => c.id === id);
-  // Cartas que pueden entrar en el sorteo: activas y con nombre.
-  const pool = () => deck().cards.filter(c => c.enabled && c.name.trim());
+  const state = () => Storage.get();
+  const draw = () => state().draw;
+  const defOf = id => TABLES.find(t => t.id === id);
+  const cardOf = slot => slot && state().decks[slot.deck]?.cards.find(c => c.id === slot.card);
+  const usable = c => c.enabled && c.name.trim();
   const randomItem = arr => arr[Math.floor(Math.random() * arr.length)];
   // Texto escapado con *cursivas* estilo Markdown.
   const rich = s => Tracker.esc(s || '').replace(/\*(.+?)\*/g, '<em>$1</em>');
 
+  // Todas las cartas sorteables de las tablas elegidas, como { deck, card }.
+  const drawPool = () => draw().tables.flatMap(deck =>
+    state().decks[deck].cards.filter(usable).map(c => ({ deck, card: c.id })));
+  const onTable = (slot, slots) => slots.some(s => s && s.deck === slot.deck && s.card === slot.card);
+
   function init() {
     try {
       const saved = localStorage.getItem(CURRENT_KEY);
-      if (Storage.TABLES.some(t => t.id === saved)) current = saved;
+      if (TABLES.some(t => t.id === saved)) current = saved;
     } catch {}
 
-    $('#deck-switch').innerHTML = Storage.TABLES.map(t =>
-      `<button type="button" role="tab" data-deck="${t.id}">${t.icon} ${t.short}</button>`).join('');
+    $('#draw-tables').addEventListener('click', e => {
+      const b = e.target.closest('[data-deck]');
+      if (b) toggleDrawTable(b.dataset.deck);
+    });
     $('#deck-switch').addEventListener('click', e => {
       const b = e.target.closest('[data-deck]');
-      if (b) select(b.dataset.deck);
+      if (b) selectDeck(b.dataset.deck);
     });
-    $('#table-shuffle').addEventListener('click', shuffleTable);
-    $('#table-pick').addEventListener('click', pickOne);
+    $('#table-shuffle').addEventListener('click', newGame);
     $('#card-add').addEventListener('click', addCard);
     render();
   }
 
-  function select(id) {
-    current = id;
-    try { localStorage.setItem(CURRENT_KEY, id); } catch {}
-    render();
-  }
-
   function render() {
-    const d = def();
-    $('#view-tables').dataset.deck = d.id;
-    document.querySelectorAll('#deck-switch button').forEach(b => {
-      const on = b.dataset.deck === d.id;
-      b.classList.toggle('active', on);
-      b.setAttribute('aria-selected', on);
-    });
-    $('#mesa-title').textContent = d.name;
-    $('#mesa-subtitle').textContent = d.subtitle;
-    renderTable();
+    renderDraw();
     renderDeck();
   }
 
-  // ---------- Mesa de la partida ----------
+  // ---------- Mesa de la partida (5 colores) ----------
 
-  function shuffleTable() {
-    const cards = [...pool()];
-    if (!cards.length) return App.toast('No hay cartas activas en este mazo');
-    // Fisher–Yates
-    for (let i = cards.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [cards[i], cards[j]] = [cards[j], cards[i]];
+  function toggleDrawTable(id) {
+    const tables = draw().tables;
+    if (tables.includes(id)) {
+      if (tables.length === 1) return App.toast('Tiene que entrar al menos una tabla');
+      draw().tables = tables.filter(t => t !== id);
+    } else {
+      draw().tables = TABLES.map(t => t.id).filter(t => t === id || tables.includes(t));
     }
-    deck().table = cards.slice(0, SIZE).map(c => c.id);
     Storage.save();
-    renderTable(true);
-    if (cards.length < SIZE) App.toast(`Solo hay ${cards.length} cartas activas; añade más al mazo`);
+    renderDrawTables();
+  }
+
+  function newGame() {
+    const pool = drawPool();
+    if (!pool.length) return App.toast('No hay cartas activas en las tablas elegidas');
+    // Fisher–Yates
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    draw().slots = COLORS.map((_, i) => pool[i] || null);
+    Storage.save();
+    renderSlots(true);
+    if (pool.length < COLORS.length) App.toast(`Solo hay ${pool.length} cartas disponibles; añade más a los mazos`);
   }
 
   function rerollSlot(i) {
-    const table = deck().table;
-    const candidates = pool().filter(c => !table.includes(c.id));
-    if (!candidates.length) return App.toast('No quedan cartas fuera de la mesa; añade más al mazo');
-    table[i] = randomItem(candidates).id;
+    const slots = draw().slots;
+    const candidates = drawPool().filter(s => !onTable(s, slots));
+    if (!candidates.length) return App.toast('No quedan habilidades fuera de la mesa');
+    slots[i] = randomItem(candidates);
     Storage.save();
-    renderTable();
+    renderSlots();
     $(`#table-list li[data-i="${i}"]`)?.classList.add('flip');
   }
 
-  function pickOne() {
-    const table = deck().table;
-    if (!table.length) return App.toast('Primero sortea la mesa');
-    const i = Math.floor(Math.random() * table.length);
-    const card = byId(table[i]);
-    document.querySelectorAll('#table-list li').forEach(li => li.classList.toggle('picked', +li.dataset.i === i));
+  function renderDraw() {
+    renderDrawTables();
+    renderSlots();
+  }
 
-    const out = $('#holy-result');
-    out.classList.remove('spin');
-    void out.offsetWidth; // reinicia la animación
-    out.classList.add('spin');
-    out.innerHTML = `<div class="name">${Tracker.esc(card.name)}</div>${extras(card)}<div class="desc">${rich(card.desc)}</div>`;
-    navigator.vibrate?.(40);
+  function renderDrawTables() {
+    $('#draw-tables').innerHTML = TABLES.map(t => {
+      const on = draw().tables.includes(t.id);
+      return `<button type="button" class="chip deck-chip ${on ? 'on' : ''}" data-deck="${t.id}" aria-pressed="${on}">${t.icon} ${t.short}</button>`;
+    }).join('');
   }
 
   // Pastillas de coste/beneficio (solo tablas `extended`).
-  function extras(card) {
-    if (!def().extended || !(card.cost || card.benefit)) return '';
+  function extras(def, card) {
+    if (!def.extended || !(card.cost || card.benefit)) return '';
     return `<div class="pills">
       ${card.cost ? `<span class="pill cost">Tú: ${Tracker.esc(card.cost)}</span>` : ''}
       ${card.benefit ? `<span class="pill benefit">Resto: ${Tracker.esc(card.benefit)}</span>` : ''}
     </div>`;
   }
 
-  function renderTable(animate = false) {
+  function renderSlots(animate = false) {
     const list = $('#table-list');
-    const table = deck().table;
-    $('#holy-result').innerHTML = '';
+    const slots = draw().slots;
 
-    if (!table.length) {
-      list.innerHTML = '<li class="empty">Pulsa «Nueva mesa» para sortear las cartas de esta partida.</li>';
+    if (!slots.length) {
+      list.innerHTML = '<li class="empty">Pulsa «Nueva partida» para repartir habilidades a las 5 cartas de colores.</li>';
       return;
     }
-    list.innerHTML = table.map((id, i) => {
-      const c = byId(id);
+    list.innerHTML = COLORS.map((color, i) => {
+      const slot = slots[i];
+      const card = cardOf(slot);
+      const def = card && defOf(slot.deck);
       return `
-        <li data-i="${i}" class="${animate ? 'flip' : ''}" style="animation-delay:${animate ? i * 80 : 0}ms">
+        <li data-i="${i}" class="slot ${animate ? 'flip' : ''}" style="--slot:${color.hex};animation-delay:${animate ? i * 80 : 0}ms">
+          <div class="slot-color"><span>${color.name}</span></div>
           <div class="info">
-            <div class="name">${Tracker.esc(c.name)}</div>
-            ${extras(c)}
-            <div class="desc">${rich(c.desc)}</div>
+            ${card ? `
+              <div class="slot-head">
+                <span class="name">${Tracker.esc(card.name)}</span>
+                <span class="origin origin-${def.id}">${def.icon} ${def.short}</span>
+              </div>
+              ${extras(def, card)}
+              <div class="desc">${rich(card.desc)}</div>`
+            : '<div class="desc">Sin habilidad. Pulsa ↻ para asignar una.</div>'}
           </div>
-          <button class="reroll" data-i="${i}" aria-label="Cambiar esta carta">↻</button>
+          <button class="reroll" data-i="${i}" aria-label="Cambiar la habilidad de la carta ${color.name.toLowerCase()}">↻</button>
         </li>`;
     }).join('');
     list.querySelectorAll('.reroll').forEach(b => b.addEventListener('click', () => rerollSlot(+b.dataset.i)));
   }
 
-  // ---------- Mazo ----------
+  // ---------- Editor de mazos ----------
 
-  const countText = () => `${deck().cards.length} cartas · ${pool().length} activas`;
+  const deck = () => state().decks[current];
+  const byId = id => deck().cards.find(c => c.id === id);
+  const countText = () => `${deck().cards.length} cartas · ${deck().cards.filter(usable).length} activas`;
+
+  function selectDeck(id) {
+    current = id;
+    try { localStorage.setItem(CURRENT_KEY, id); } catch {}
+    renderDeck();
+  }
 
   function renderDeck() {
-    const cards = deck().cards;
-    const extended = def().extended;
+    const def = defOf(current);
+    $('#deck-card').dataset.deck = def.id;
+    $('#deck-switch').innerHTML = TABLES.map(t =>
+      `<button type="button" role="tab" data-deck="${t.id}" class="${t.id === def.id ? 'active' : ''}" aria-selected="${t.id === def.id}">${t.icon} ${t.short}</button>`).join('');
+    $('#deck-title').textContent = def.name;
+    $('#deck-subtitle').textContent = def.subtitle;
     $('#deck-count').textContent = countText();
-    const list = $('#deck-list');
 
+    const cards = deck().cards;
+    const list = $('#deck-list');
     if (!cards.length) {
       list.innerHTML = '<li class="empty">El mazo está vacío. Añade vuestra primera carta.</li>';
       return;
@@ -149,7 +169,7 @@ const Tables = (() => {
           <label class="toggle"><input type="checkbox" data-field="enabled" ${c.enabled ? 'checked' : ''}> Activa</label>
           <button class="del" aria-label="Borrar carta">🗑️</button>
         </div>
-        ${extended ? `
+        ${def.extended ? `
         <div class="extra-fields">
           <input type="text" data-field="cost" value="${Tracker.esc(c.cost || '')}" maxlength="40" placeholder="Coste para ti" aria-label="Coste para ti">
           <input type="text" data-field="benefit" value="${Tracker.esc(c.benefit || '')}" maxlength="40" placeholder="Beneficio para el resto" aria-label="Beneficio para el resto">
@@ -170,13 +190,13 @@ const Tables = (() => {
     card[field] = field === 'enabled' ? e.target.checked : e.target.value;
     if (field === 'enabled') li.classList.toggle('off', !card.enabled);
     $('#deck-count').textContent = countText();
-    if (deck().table.includes(card.id)) renderTable();
+    if (onTable({ deck: current, card: card.id }, draw().slots)) renderSlots();
     clearTimeout(saveTimer);
     saveTimer = setTimeout(Storage.save, 300);
   }
 
   function addCard() {
-    deck().cards.unshift(Storage.newCard(def()));
+    deck().cards.unshift(Storage.newCard(defOf(current)));
     Storage.save();
     renderDeck();
     $('#deck-list [data-field="name"]').focus();
@@ -185,21 +205,21 @@ const Tables = (() => {
   function deleteCard(id) {
     const card = byId(id);
     if (!confirm(`¿Borrar la carta «${card.name || 'sin nombre'}»?`)) return;
-    const d = deck();
-    d.cards = d.cards.filter(c => c.id !== id);
-    // Si estaba en la mesa, se sustituye por otra carta del mazo para seguir teniendo 5.
-    const slot = d.table.indexOf(id);
-    if (slot !== -1) {
-      const candidates = pool().filter(c => !d.table.includes(c.id));
-      if (candidates.length) d.table[slot] = randomItem(candidates).id;
-      else d.table.splice(slot, 1);
+    deck().cards = deck().cards.filter(c => c.id !== id);
+    // Si estaba en la mesa, ese color recibe otra habilidad (o se queda vacío si no quedan).
+    const slots = draw().slots;
+    const i = slots.findIndex(s => s && s.deck === current && s.card === id);
+    if (i !== -1) {
+      const candidates = drawPool().filter(s => !onTable(s, slots));
+      slots[i] = candidates.length ? randomItem(candidates) : null;
     }
     Storage.save();
     render();
   }
 
   function reset() {
-    Storage.get().decks = Storage.defaultDecks();
+    state().decks = Storage.defaultDecks();
+    state().draw = Storage.defaultDraw();
     Storage.save();
     render();
   }

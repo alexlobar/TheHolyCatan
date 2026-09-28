@@ -58,42 +58,61 @@ const Storage = (() => {
     id: uid(), name, desc, enabled: true, ...(def.extended ? { cost, benefit } : {}),
   });
 
-  const defaultDeck = def => ({ cards: def.cards.map(c => newCard(def, ...c)), table: [] });
+  // Las 5 cartas físicas de colores: en cada partida cada color recibe una habilidad al azar.
+  const COLORS = [
+    { id: 'black', name: 'Negra', hex: '#2b2b2b' },
+    { id: 'green', name: 'Verde', hex: '#3f8f3a' },
+    { id: 'orange', name: 'Naranja', hex: '#e07b1f' },
+    { id: 'purple', name: 'Morada', hex: '#7b4ca0' },
+    { id: 'blue', name: 'Azul', hex: '#2f6db5' },
+  ];
+
+  const defaultDeck = def => ({ cards: def.cards.map(c => newCard(def, ...c)) });
   const defaultDecks = () => Object.fromEntries(TABLES.map(t => [t.id, defaultDeck(t)]));
+  const defaultDraw = () => ({ tables: TABLES.map(t => t.id), slots: [] });
 
   const defaults = () => ({
-    version: 3,
+    version: 4,
     players: [...PLAYERS],
     games: [],   // { id, date, players: [...], winner, note }
-    decks: {},   // { [tablaId]: { cards: [{ id, name, desc, enabled, cost?, benefit? }], table: [ids sorteados] } }
+    decks: {},   // { [tablaId]: { cards: [{ id, name, desc, enabled, cost?, benefit? }] } }
+    draw: defaultDraw(), // mesa de la partida: tablas que entran + slots[i] = { deck, card } para COLORS[i] (o null)
   });
 
   // Cartas de relleno de versiones anteriores: si solo hay estas, se sustituyen por las reales.
   const isPlaceholder = c => /^(Carta|Uso) de desarrollo \d$/.test(c.name);
 
   // Rellena lo que falte y migra datos antiguos:
-  //  v1: `holy` = 5 usos fijos · v2: `cards` + `table` = un único mazo · v3: `decks` por tabla.
+  //  v1: `holy` = 5 usos fijos · v2: `cards` + `table` = un único mazo
+  //  v3: `decks` por tabla, cada uno con su mesa · v4: una sola mesa de 5 colores (`draw`).
   function normalize(data) {
     const s = { ...defaults(), ...data };
     const decks = data.decks && typeof data.decks === 'object' ? { ...data.decks } : {};
 
     const old = Array.isArray(data.cards) ? data.cards : Array.isArray(data.holy) ? data.holy : null;
     if (!decks.holy && old && old.some(c => !isPlaceholder(c))) {
-      decks.holy = {
-        cards: old.map(c => ({ id: c.id || uid(), name: c.name, desc: c.desc, enabled: c.enabled !== false })),
-        table: Array.isArray(data.table) ? data.table : [],
-      };
+      decks.holy = { cards: old.map(c => ({ id: c.id || uid(), name: c.name, desc: c.desc, enabled: c.enabled !== false })) };
     }
 
     for (const t of TABLES) {
       const d = decks[t.id];
-      if (!d || !Array.isArray(d.cards)) { decks[t.id] = defaultDeck(t); continue; }
-      d.table = (Array.isArray(d.table) ? d.table : []).filter(id => d.cards.some(c => c.id === id));
+      if (!d || !Array.isArray(d.cards)) decks[t.id] = defaultDeck(t);
+      else delete d.table;
     }
+
+    const draw = data.draw && typeof data.draw === 'object' ? data.draw : defaultDraw();
+    const tables = (Array.isArray(draw.tables) ? draw.tables : []).filter(id => decks[id]);
+    const exists = slot => slot && decks[slot.deck]?.cards.some(c => c.id === slot.card);
+    s.draw = {
+      tables: tables.length ? tables : defaultDraw().tables,
+      slots: Array.isArray(draw.slots) && draw.slots.length
+        ? COLORS.map((_, i) => exists(draw.slots[i]) ? draw.slots[i] : null)
+        : [],
+    };
 
     s.decks = decks;
     delete s.holy; delete s.cards; delete s.table;
-    s.version = 3;
+    s.version = 4;
     return s;
   }
 
@@ -126,6 +145,8 @@ const Storage = (() => {
 
   return {
     TABLES,
+    COLORS,
+    defaultDraw,
     load,
     save,
     replace,
