@@ -44,7 +44,9 @@ Abre `index.html` en el navegador (doble clic).
 Funciona sin conexión gracias a `sw.js` (estrategia red primero: con internet siempre carga la última versión).
 Si añades un archivo nuevo a la app, inclúyelo en la lista `ASSETS` de `sw.js`.
 
-**Versión**: al publicar cambios, sube la versión en los tres sitios (deben coincidir): `VERSION` en `js/app.js`, `CACHE` en `sw.js` y `data-build` en `index.html`. La versión cargada se ve al final de *Ajustes*.
+**Versión**: al publicar cambios, sube la versión en los cuatro sitios (deben coincidir): `VERSION` en `js/app.js`, `CACHE` en `sw.js`, `data-build` en `index.html` y el `?v=` de cada `<script>`/`<link>` de `index.html`. El `?v=` evita que el móvil mezcle archivos nuevos y viejos (GitHub Pages deja cachearlos 10 min). La versión cargada se ve al final de *Ajustes*.
+
+**Si algo falla**: la app no se bloquea. Cada parte arranca por separado y, si una falla, sale arriba un aviso rojo con el error y el botón **📋 Copiar error** para pasarlo. Si los datos guardados no se pueden leer, se hace antes una copia de rescate en `localStorage` (`catan-app-v1-rescate-…`).
 
 > En iPhone, la app instalada y Safari guardan datos por separado: usad siempre la app instalada (o exportad/importad).
 

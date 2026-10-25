@@ -85,7 +85,7 @@ const Game = (() => {
 
   function renderSetup() {
     const players = state().players;
-    setupPlayers ??= new Set(players);
+    if (!setupPlayers) setupPlayers = new Set(players);
     $('#setup-players').innerHTML = players.map(p =>
       `<button type="button" class="chip ${setupPlayers.has(p) ? 'on' : ''}" data-p="${esc(p)}">${esc(Stats.who(p))}</button>`).join('');
     const founders = [...setupPlayers].filter(p => Storage.FOUNDERS.includes(p)).length;

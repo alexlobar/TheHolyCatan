@@ -9,7 +9,7 @@ const Photos = (() => {
   let dbp = null;
 
   function db() {
-    dbp ??= new Promise((resolve, reject) => {
+    if (!dbp) dbp = new Promise((resolve, reject) => {
       const req = indexedDB.open(DB, 1);
       req.onupgradeneeded = () => req.result.createObjectStore(STORE);
       req.onsuccess = () => resolve(req.result);
@@ -118,7 +118,7 @@ const Photos = (() => {
     dlg.querySelector('.viewer-caption').textContent = g
       ? `Partida ${Stats.toRoman(Stats.gameNumber(s.games, g))} · 🏆 ${g.winner} · ${Stats.fmtDate(g.date)}`
       : '';
-    dlg.showModal();
+    if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', ''); // Safari < 15.4
   }
 
   function initViewer() {

@@ -1,7 +1,7 @@
 // Arranque, navegación por pestañas, ajustes y utilidades comunes.
 const App = (() => {
   // Debe coincidir con CACHE en sw.js y data-build en index.html.
-  const VERSION = '1.6.0';
+  const VERSION = '1.6.1';
   const BANNER_KEY = 'catan-install-banner-closed';
   const $ = sel => document.querySelector(sel);
   let toastTimer;
@@ -22,30 +22,65 @@ const App = (() => {
     renderInstall();
   });
 
-  function init() {
-    Storage.load();
-    initTheme();
-    Tables.init();
-    Tracker.init();
-    Game.init();
-    Profile.init();
-    Rules.init();
-    Fun.init();
-    Wrapped.init();
-    Photos.initViewer();
-    initTabs();
-    initSettings();
-    initInstall();
+  // ---------- Arranque a prueba de fallos ----------
+  // Cada pieza arranca por separado: si una falla (dato raro, navegador antiguo, archivo
+  // de otra versión), las demás siguen funcionando y se avisa con el error en pantalla.
+  const errors = [];
+
+  function reportError(where, e) {
+    const msg = `${where}: ${e && e.message ? e.message : e}`;
+    console.error(msg, e);
+    if (errors.includes(msg)) return;
+    errors.push(msg);
+    const box = $('#app-error');
+    if (!box) return;
+    box.hidden = false;
+    box.querySelector('.err-list').textContent = errors.join('\n');
   }
 
-  // Vuelve a pintar todas las vistas tras un cambio de datos.
+  function safe(where, fn) {
+    try { return fn(); } catch (e) { reportError(where, e); }
+  }
+
+  window.addEventListener('error', e => reportError('Error', e.error || e.message));
+  window.addEventListener('unhandledrejection', e => reportError('Promesa', e.reason));
+
+  function init() {
+    safe('Datos', () => Storage.load());
+    safe('Pestañas', initTabs); // lo primero: así siempre se puede navegar
+    safe('Tema', initTheme);
+    safe('Holy Table', () => Tables.init());
+    safe('Tracker', () => Tracker.init());
+    safe('Partida', () => Game.init());
+    safe('Stats', () => Profile.init());
+    safe('Reglas', () => Rules.init());
+    safe('Mientras esperas', () => Fun.init());
+    safe('Wrapped', () => Wrapped.init());
+    safe('Fotos', () => Photos.initViewer());
+    safe('Ajustes', initSettings);
+    safe('Instalar', initInstall);
+    safe('Pestaña inicial', openLastTab);
+    safe('Aviso de error', initErrorBox);
+  }
+
+  function initErrorBox() {
+    const box = $('#app-error');
+    box.querySelector('.err-copy').addEventListener('click', () => {
+      const text = `Catán Tracker ${VERSION} · ${navigator.userAgent}\n${errors.join('\n')}`;
+      navigator.clipboard?.writeText(text).then(() => toast('📋 Error copiado'), () => prompt('Copia el error:', text));
+    });
+    box.querySelector('.err-reload').addEventListener('click', () => location.reload());
+    box.querySelector('.err-close').addEventListener('click', () => { box.hidden = true; });
+  }
+
+  // Vuelve a pintar todas las vistas tras un cambio de datos (cada una por separado).
   function refresh() {
-    Tracker.render();
-    Tables.render();
-    Game.render();
-    Profile.render();
-    Rules.render();
-    Fun.render();
+    safe('Tracker', () => Tracker.render());
+    safe('Holy Table', () => Tables.render());
+    safe('Partida', () => Game.render());
+    safe('Stats', () => Profile.render());
+    safe('Reglas', () => Rules.render());
+    safe('Mientras esperas', () => Fun.render());
   }
 
   // Compartir texto (+ foto si la hay) con la hoja nativa del móvil (WhatsApp, Telegram…); si no hay, copiar.
@@ -87,7 +122,10 @@ const App = (() => {
 
   function initTheme() {
     applyTheme(getTheme());
-    darkQuery.addEventListener('change', () => applyTheme(getTheme()));
+    // Safari < 14 solo tiene addListener en MediaQueryList.
+    const onChange = () => applyTheme(getTheme());
+    if (darkQuery.addEventListener) darkQuery.addEventListener('change', onChange);
+    else if (darkQuery.addListener) darkQuery.addListener(onChange);
     $('#theme-switch').addEventListener('click', e => {
       const b = e.target.closest('[data-theme]');
       if (!b) return;
@@ -147,7 +185,7 @@ const App = (() => {
 
   // Cambia de vista. Las de la barra superior (📜 Reglas, 🎮 Mientras esperas) no están en la inferior.
   function show(view) {
-    if (view !== 'fun') Fun.leave(); // para el juego de las ovejas si se sale a mitad
+    // Primero se cambia de vista (esto nunca debe fallar); luego se repinta.
     document.querySelectorAll('[data-view]').forEach(b => {
       const on = b.dataset.view === view;
       b.classList.toggle('active', on);
@@ -155,16 +193,20 @@ const App = (() => {
     });
     document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === `view-${view}`));
     try { localStorage.setItem('catan-app-tab', view); } catch {}
-    refresh(); // por si otra pestaña cambió datos (p. ej. una mesa nueva en la Holy Table)
     window.scrollTo(0, 0);
+    if (view !== 'fun') safe('Mientras esperas', () => Fun.leave()); // para el juego de las ovejas
+    refresh(); // por si otra pestaña cambió datos (p. ej. una mesa nueva en la Holy Table)
   }
 
   function initTabs() {
     document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => show(b.dataset.view)));
+  }
+
+  function openLastTab() {
     let last = null;
     try { last = localStorage.getItem('catan-app-tab'); } catch {}
     // Con una partida en curso se abre directamente en ella.
-    if (Storage.get().current) last = 'game';
+    if (Storage.get()?.current) last = 'game';
     if (last && $(`#view-${last}`)) show(last);
   }
 

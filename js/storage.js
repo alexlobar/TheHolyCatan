@@ -17,6 +17,9 @@ const Storage = (() => {
   };
 
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  // Copia profunda de datos simples (structuredClone no existe en navegadores algo antiguos).
+  const clone = v => JSON.parse(JSON.stringify(v));
+  const str = v => (typeof v === 'string' ? v : v == null ? '' : String(v));
 
   // Definición de las tablas de cartas de la casa. `extended` añade los campos coste/beneficio.
   // En los textos, *así* se muestra en cursiva.
@@ -105,7 +108,7 @@ const Storage = (() => {
   const defaults = () => ({
     version: 7,
     players: [...PLAYERS],
-    legacy: structuredClone(LEGACY), // { [año]: { jugador: victorias } } de la liga de WhatsApp
+    legacy: clone(LEGACY), // { [año]: { jugador: victorias } } de la liga de WhatsApp
     // { id, date, players, winner, note, abilities?: [{ color, deck, name }], duration?: segundos,
     //   rounds?, photo?: true (la foto vive en IndexedDB, ver photos.js) }
     games: [],
@@ -131,7 +134,31 @@ const Storage = (() => {
     s.settings = { ...defaultSettings(), ...(data.settings || {}) };
     if (s.current && (!Array.isArray(s.current.players) || !s.current.timer)) s.current = null;
     if (!Array.isArray(s.rules)) s.rules = defaultRules();
-    if (!s.legacy || typeof s.legacy !== 'object') s.legacy = structuredClone(LEGACY);
+    if (!s.legacy || typeof s.legacy !== 'object') s.legacy = clone(LEGACY);
+    // Saneado: datos rotos o de versiones viejas no deben romper la app al arrancar.
+    for (const [y, row] of Object.entries(s.legacy)) {
+      if (!row || typeof row !== 'object') { delete s.legacy[y]; continue; }
+      for (const [p, n] of Object.entries(row)) row[p] = Math.max(0, parseInt(n, 10) || 0);
+    }
+    s.games = s.games
+      .filter(g => g && typeof g === 'object' && Array.isArray(g.players) && g.winner)
+      .map(g => ({
+        ...g,
+        id: str(g.id) || uid(),
+        date: /^\d{4}-\d{2}-\d{2}$/.test(g.date) ? g.date : '',
+        players: g.players.map(str).filter(Boolean),
+        winner: str(g.winner),
+        note: str(g.note),
+        abilities: Array.isArray(g.abilities) ? g.abilities.filter(a => a && a.name) : undefined,
+      }));
+    if (!Array.isArray(s.players) || !s.players.length) s.players = [...PLAYERS];
+    s.rules = s.rules.filter(r => r && typeof r === 'object').map(r => ({ id: str(r.id) || uid(), title: str(r.title), text: str(r.text) }));
+    if (s.current) {
+      s.current.abilities = Array.isArray(s.current.abilities) ? s.current.abilities : [];
+      s.current.effects = Array.isArray(s.current.effects) ? s.current.effects : [];
+      s.current.round = Math.max(1, parseInt(s.current.round, 10) || 1);
+    }
+    if (!s.draw || typeof s.draw !== 'object') s.draw = defaultDraw();
     // Una sola vez al pasar a v7: la liga es anual y entra la regla de los fundadores.
     if (prev && prev < 7) {
       s.settings.seasonMode = 'year';
@@ -148,7 +175,12 @@ const Storage = (() => {
       const d = decks[t.id];
       if (!d || !Array.isArray(d.cards)) decks[t.id] = defaultDeck(t);
       else delete d.table;
+      decks[t.id].cards = decks[t.id].cards.filter(c => c && typeof c === 'object');
       for (const c of decks[t.id].cards) {
+        c.id = str(c.id) || uid();
+        c.name = str(c.name);
+        c.desc = str(c.desc);
+        c.enabled = c.enabled !== false;
         if (typeof c.rounds !== 'number') c.rounds = DEFAULT_ROUNDS[c.name] || 0;
       }
     }
@@ -172,11 +204,16 @@ const Storage = (() => {
   let state;
 
   function load() {
+    let raw = null;
     try {
-      const raw = localStorage.getItem(KEY);
+      raw = localStorage.getItem(KEY);
       state = normalize(raw ? JSON.parse(raw) : {});
-    } catch {
+    } catch (e) {
+      // No se pudieron leer los datos: se guarda una copia intacta antes de seguir, para que
+      // nada los sobrescriba (se puede recuperar exportándola desde la consola o con ayuda).
+      try { if (raw) localStorage.setItem(`${KEY}-rescate-${Date.now()}`, raw); } catch {}
       state = normalize({});
+      throw new Error(`No se pudieron leer los datos guardados (copia de rescate hecha): ${e.message}`);
     }
     return state;
   }

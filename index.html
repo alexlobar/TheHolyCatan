@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es" data-build="1.6.0">
+<html lang="es" data-build="1.6.1">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -16,7 +16,7 @@
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="icon" href="icons/favicon-32.png" type="image/png" sizes="32x32">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" sizes="180x180">
-  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/styles.css?v=1.6.1">
 </head>
 <body>
   <header class="topbar">
@@ -26,6 +26,17 @@
       <button type="button" class="top-btn" data-view="rules" aria-pressed="false" aria-label="Reglas de la casa">📜</button>
     </div>
   </header>
+
+  <!-- Aviso si algo falla al arrancar o al usar la app (la app sigue funcionando) -->
+  <div id="app-error" class="app-error" role="alert" hidden>
+    <b>⚠️ Algo ha fallado</b>
+    <pre class="err-list"></pre>
+    <div class="err-actions">
+      <button type="button" class="btn err-reload">↻ Recargar</button>
+      <button type="button" class="btn err-copy">📋 Copiar error</button>
+      <button type="button" class="btn err-close">Cerrar</button>
+    </div>
+  </div>
 
   <main>
     <!-- ============ PARTIDA (modo partida en curso) ============ -->
@@ -431,17 +442,35 @@
     </div>
   </div>
 
-  <script src="js/storage.js"></script>
-  <script src="js/stats.js"></script>
-  <script src="js/charts.js"></script>
-  <script src="js/photos.js"></script>
-  <script src="js/tracker.js"></script>
-  <script src="js/tables.js"></script>
-  <script src="js/game.js"></script>
-  <script src="js/profile.js"></script>
-  <script src="js/rules.js"></script>
-  <script src="js/fun.js"></script>
-  <script src="js/wrapped.js"></script>
-  <script src="js/app.js"></script>
+  <script src="js/storage.js?v=1.6.1"></script>
+  <script src="js/stats.js?v=1.6.1"></script>
+  <script src="js/charts.js?v=1.6.1"></script>
+  <script src="js/photos.js?v=1.6.1"></script>
+  <script src="js/tracker.js?v=1.6.1"></script>
+  <script src="js/tables.js?v=1.6.1"></script>
+  <script src="js/game.js?v=1.6.1"></script>
+  <script src="js/profile.js?v=1.6.1"></script>
+  <script src="js/rules.js?v=1.6.1"></script>
+  <script src="js/fun.js?v=1.6.1"></script>
+  <script src="js/wrapped.js?v=1.6.1"></script>
+  <script src="js/app.js?v=1.6.1"></script>
+  <!-- Red de seguridad: si app.js no llega a cargar (archivo de otra versión, error de sintaxis,
+       navegador antiguo), al menos las pestañas funcionan y se avisa del problema. -->
+  <script>
+    window.addEventListener('load', function () {
+      if (typeof App !== 'undefined') return;
+      var views = document.querySelectorAll('.view');
+      document.querySelectorAll('[data-view]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          views.forEach(function (v) { v.classList.toggle('active', v.id === 'view-' + b.dataset.view); });
+        });
+      });
+      var box = document.getElementById('app-error');
+      box.hidden = false;
+      box.querySelector('.err-list').textContent = 'La app no ha terminado de cargar (js/app.js). Recarga la página; si sigue igual, vuelve a subir todos los archivos a GitHub.';
+      box.querySelector('.err-reload').onclick = function () { location.reload(); };
+      box.querySelector('.err-close').onclick = function () { box.hidden = true; };
+    });
+  </script>
 </body>
 </html>

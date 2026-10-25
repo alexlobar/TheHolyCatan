@@ -726,6 +726,21 @@ table.stats { width: 100%; border-collapse: collapse; }
 .wheel-name.chosen { background: var(--brick); border-color: var(--brick); color: #fff; animation: pop .4s ease; }
 .wheel-result { text-align: center; font-size: 1.05rem; min-height: 1.4em; margin: 12px 0 0; }
 
+/* ================= Aviso de error ================= */
+.app-error {
+  position: sticky; top: 0; z-index: 30;
+  margin: 0; padding: 12px 16px;
+  background: #7a1f12; color: #fff;
+  font-size: .85rem;
+}
+.app-error pre {
+  white-space: pre-wrap; word-break: break-word;
+  margin: 6px 0 10px; font-size: .75rem; max-height: 120px; overflow: auto;
+  background: rgba(0, 0, 0, .25); padding: 6px 8px; border-radius: 6px;
+}
+.err-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.err-actions .btn { min-height: 38px; padding: 6px 10px; font-size: .85rem; background: rgba(255, 255, 255, .15); color: #fff; border-color: rgba(255, 255, 255, .4); }
+
 /* ================= Liga: invitados, partidas no válidas, palmarés ================= */
 .warn {
   margin: 8px 0 0; padding: 8px 10px; border-radius: 8px;

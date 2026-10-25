@@ -2,7 +2,7 @@
 // Estrategia "red primero": con internet siempre se sirve la última versión publicada
 // (y se actualiza la copia); sin internet se usa la copia guardada.
 // Debe coincidir con VERSION en js/app.js y data-build en index.html: cambiarlo renueva la copia guardada.
-const CACHE = 'catan-v1.6.0';
+const CACHE = 'catan-v1.6.1';
 const ASSETS = [
   './',
   './index.html',
@@ -43,8 +43,10 @@ self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
 
+  // cache: 'no-cache' → el navegador siempre pregunta al servidor si hay versión nueva
+  // (GitHub Pages deja guardar los archivos 10 min: sin esto se mezclaban versiones al actualizar).
   e.respondWith(
-    fetch(req)
+    fetch(req, { cache: 'no-cache' })
       .then(res => {
         if (res.ok) {
           const copy = res.clone();

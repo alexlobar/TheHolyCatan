@@ -188,7 +188,7 @@ const Stats = (() => {
     for (const g of mine) {
       const k = (g.date || '').slice(0, 7);
       if (!k) continue;
-      months[k] ??= { key: k, played: 0, wins: 0 };
+      if (!months[k]) months[k] = { key: k, played: 0, wins: 0 };
       months[k].played++;
       if (g.winner === p) months[k].wins++;
     }
@@ -224,7 +224,7 @@ const Stats = (() => {
     for (const g of wins) {
       for (const a of g.abilities || []) {
         const k = a.deck + '|' + a.name;
-        lucky[k] ??= { name: a.name, deck: a.deck, n: 0 };
+        if (!lucky[k]) lucky[k] = { name: a.name, deck: a.deck, n: 0 };
         lucky[k].n++;
       }
     }
@@ -323,7 +323,7 @@ const Stats = (() => {
     for (const g of games) {
       for (const a of g.abilities || []) {
         const k = a.deck + '|' + a.name;
-        map[k] ??= { name: a.name, deck: a.deck, games: 0, wins: {} };
+        if (!map[k]) map[k] = { name: a.name, deck: a.deck, games: 0, wins: {} };
         map[k].games++;
         map[k].wins[g.winner] = (map[k].wins[g.winner] || 0) + 1;
       }
@@ -420,7 +420,7 @@ const Stats = (() => {
     const extra = legacyOf(scope, mode);
     const score = {}; // score[titleId][player] = número (más alto = mejor) o null
     const label = {}; // texto del valor para mostrar
-    const set = (id, p, v, txt) => { (score[id] ??= {})[p] = v; (label[id] ??= {})[p] = txt; };
+    const set = (id, p, v, txt) => { (score[id] = score[id] || {})[p] = v; (label[id] = label[id] || {})[p] = txt; };
 
     for (const p of players) {
       const mine = games.filter(g => g.players.includes(p));
