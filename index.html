@@ -1,14 +1,17 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-build="1.3.0">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#b5462a">
+  <meta name="color-scheme" content="light dark">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Catán">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <title>Catán Tracker</title>
+  <!-- Aplica el tema guardado antes de pintar, para que no parpadee en claro. -->
+  <script>try { var t = localStorage.getItem('catan-app-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}</script>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="icon" href="icons/favicon-32.png" type="image/png" sizes="32x32">
@@ -18,13 +21,138 @@
 <body>
   <header class="topbar">
     <h1>⬡ Catán Tracker</h1>
+    <div class="topbar-actions">
+      <button type="button" class="top-btn" data-view="fun" aria-pressed="false" aria-label="Mientras esperas: minijuegos">🎮</button>
+      <button type="button" class="top-btn" data-view="rules" aria-pressed="false" aria-label="Reglas de la casa">📜</button>
+    </div>
   </header>
 
   <main>
+    <!-- ============ PARTIDA (modo partida en curso) ============ -->
+    <section id="view-game" class="view">
+      <!-- Preparar -->
+      <div id="game-setup" class="card">
+        <h2>Nueva partida</h2>
+        <fieldset>
+          <legend>¿Quién juega?</legend>
+          <div id="setup-players" class="chip-group"></div>
+        </fieldset>
+        <fieldset>
+          <legend>Habilidades de la Holy Table</legend>
+          <div id="setup-abilities" class="mini-abilities"></div>
+          <div id="setup-redraw-row" class="setup-redraw">
+            <label class="check"><input type="checkbox" id="setup-redraw" checked> Sortear habilidades nuevas al empezar</label>
+            <button type="button" id="setup-redraw-now" class="link-btn">🎲 Sortear ahora</button>
+          </div>
+        </fieldset>
+        <button type="button" id="game-start" class="btn primary big">▶ Empezar partida</button>
+        <p class="muted small-note">Cronómetro, rondas y penalizaciones. Al terminar, la partida se guarda sola con sus habilidades y su duración.</p>
+      </div>
+
+      <!-- En juego -->
+      <div id="game-live" class="live" hidden>
+        <div class="card live-head">
+          <div class="live-top">
+            <span class="live-badge">● En juego</span>
+            <span id="live-players" class="muted"></span>
+          </div>
+          <div id="game-timer" class="timer">0:00:00</div>
+          <button type="button" id="game-pause" class="btn">⏸ Pausar</button>
+          <button type="button" id="live-bored" class="bored-btn">🥱 ¿Te aburres en el turno de otro? <b>🎮 Mientras esperas</b></button>
+          <div class="round-row">
+            <button type="button" id="round-prev" class="icon-btn round-adj" aria-label="Corregir: ronda anterior">−</button>
+            <div class="round">Ronda <b id="game-round">1</b></div>
+            <button type="button" id="round-next" class="btn primary big">⏭ Siguiente ronda</button>
+          </div>
+          <p id="live-dice" class="muted small-note"></p>
+        </div>
+
+        <div class="card">
+          <h2>Habilidades en juego</h2>
+          <div id="live-abilities" class="live-abilities"></div>
+        </div>
+
+        <div class="card">
+          <h2>Penalizaciones activas</h2>
+          <ul id="effects-list" class="effects"></ul>
+          <div class="effect-form">
+            <label class="field">Carta
+              <select id="effect-card"></select>
+            </label>
+            <input type="text" id="effect-custom" class="input" maxlength="40" placeholder="Nombre de la penalización" hidden>
+            <div class="effect-row">
+              <label class="field">Afecta a
+                <select id="effect-player"></select>
+              </label>
+              <label class="field">Rondas
+                <input type="number" id="effect-rounds" min="1" max="20" value="1" inputmode="numeric">
+              </label>
+            </div>
+            <button type="button" id="effect-add" class="btn">＋ Añadir penalización</button>
+          </div>
+          <p class="muted small-note">Con «Siguiente ronda» todas bajan una ronda y avisan al terminar. ✕ = se libra antes (p. ej. doble 1 o doble 6 en El Destierro).</p>
+        </div>
+
+        <div class="card">
+          <h2>Terminar partida</h2>
+          <fieldset>
+            <legend>¿Quién ha ganado?</legend>
+            <div id="finish-winner" class="chip-group"></div>
+          </fieldset>
+          <label class="field">Nota (opcional)
+            <input type="text" id="finish-note" maxlength="80" placeholder="Ej: remontada épica con el puerto 2:1">
+          </label>
+          <button type="button" id="game-finish" class="btn primary big">🏁 Guardar partida</button>
+          <button type="button" id="game-cancel" class="btn danger subtle">Cancelar partida</button>
+        </div>
+      </div>
+
+      <!-- Resumen -->
+      <div id="game-summary" class="card summary" hidden>
+        <div class="summary-trophy">🏆</div>
+        <h2 id="summary-title"></h2>
+        <p id="summary-meta" class="muted"></p>
+        <ul id="summary-achievements" class="summary-ach"></ul>
+        <button type="button" id="summary-thumb" class="summary-thumb" aria-label="Ver foto" hidden><img alt="Foto del tablero"></button>
+        <button type="button" id="summary-photo" class="btn">📷 Añadir foto del tablero</button>
+        <button type="button" id="summary-share" class="btn primary big">📤 Compartir en WhatsApp</button>
+        <button type="button" id="summary-new" class="btn">Nueva partida</button>
+      </div>
+    </section>
+
     <!-- ============ TRACKER ============ -->
     <section id="view-tracker" class="view active">
+      <div id="install-banner" class="install-banner" hidden>
+        <span class="install-text">📲 Instala <b>Catán Tracker</b> en el móvil</span>
+        <button type="button" class="btn primary install-trigger">Instalar</button>
+        <button type="button" class="banner-close" aria-label="Ahora no">✕</button>
+      </div>
+
       <div class="card">
-        <h2>Registrar partida</h2>
+        <div class="card-head">
+          <h2>Clasificación</h2>
+          <select id="season-select" class="season-select" aria-label="Temporada"></select>
+        </div>
+        <div class="table-wrap">
+          <table class="stats">
+            <thead>
+              <tr><th>Jugador</th><th>PJ</th><th>V</th><th>% V</th></tr>
+            </thead>
+            <tbody id="stats-body"></tbody>
+          </table>
+        </div>
+        <p id="ranking-empty" class="muted small-note" hidden>Aún no hay partidas en esta temporada.</p>
+        <p class="legend">🥇 🥈 🥉 podio · 🪵 cuchara de madera</p>
+      </div>
+
+      <div id="champions-card" class="card" hidden>
+        <h2>🏆 Campeones de temporada</h2>
+        <ul id="champions" class="champions"></ul>
+      </div>
+
+      <div class="card">
+        <h2>Registro rápido</h2>
+        <p class="muted">Para partidas jugadas sin el modo 🎲 Partida.</p>
         <form id="game-form">
           <fieldset>
             <legend>¿Quién ha jugado?</legend>
@@ -42,26 +170,62 @@
             Nota (opcional)
             <input type="text" id="game-note" maxlength="80" placeholder="Ej: remontada épica con el puerto 2:1">
           </label>
+          <label id="with-abilities-row" class="check" hidden>
+            <input type="checkbox" id="with-abilities" checked> Guardar con las habilidades de la Holy Table actual
+          </label>
           <button type="submit" class="btn primary">Guardar partida</button>
         </form>
       </div>
 
-      <div class="card">
-        <h2>Clasificación</h2>
-        <div class="table-wrap">
-          <table class="stats">
-            <thead>
-              <tr><th>Jugador</th><th>PJ</th><th>V</th><th>% V</th></tr>
-            </thead>
-            <tbody id="stats-body"></tbody>
-          </table>
+      <div class="card history-card">
+        <h2>Historial</h2>
+        <ul id="history" class="history"></ul>
+      </div>
+    </section>
+
+    <!-- ============ STATS ============ -->
+    <section id="view-stats" class="view">
+      <div class="card evo-card">
+        <div class="card-head">
+          <h2>Evolución</h2>
+          <select id="evo-season" class="season-select" aria-label="Periodo del gráfico"></select>
         </div>
-        <p class="legend">🥇 🥈 🥉 podio · 🪵 cuchara de madera</p>
+        <p class="muted">Victorias acumuladas de cada jugador, partida a partida. Toca el gráfico para ver el detalle.</p>
+        <div id="evo-legend" class="chart-legend"></div>
+        <div id="evo-chart" class="chart-box"></div>
+        <p id="evo-empty" class="empty" hidden>Aún no hay partidas en este periodo.</p>
+        <details id="evo-table-wrap" class="chart-table">
+          <summary>Ver como tabla</summary>
+          <table id="evo-table" class="stats"></table>
+        </details>
       </div>
 
       <div class="card">
-        <h2>Historial</h2>
-        <ul id="history" class="history"></ul>
+        <h2>Ficha de jugador</h2>
+        <div id="profile-players" class="chip-group"></div>
+        <div id="profile-kpis" class="kpis"></div>
+        <ul id="profile-months" class="kv"></ul>
+      </div>
+
+      <div class="card">
+        <h2>Cara a cara</h2>
+        <ul id="profile-h2h" class="h2h-list"></ul>
+        <h3>🍀 Habilidades de la suerte</h3>
+        <ul id="profile-lucky" class="kv"></ul>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Logros</h2>
+          <span id="achievements-count" class="muted"></span>
+        </div>
+        <ul id="achievements" class="achievements"></ul>
+      </div>
+
+      <div class="card">
+        <h2>Habilidades ganadoras</h2>
+        <p class="muted">Cuántas veces ha estado en juego cada habilidad y quién gana más con ella.</p>
+        <ul id="abilities-stats" class="ability-stats"></ul>
       </div>
     </section>
 
@@ -91,16 +255,101 @@
       </div>
     </section>
 
+    <!-- ============ REGLAS DE LA CASA (botón 📜 de la barra superior) ============ -->
+    <section id="view-rules" class="view">
+      <div class="card">
+        <div class="card-head">
+          <h2>📜 Reglas de la casa</h2>
+          <button type="button" id="rules-edit" class="btn small-btn" aria-pressed="false">✏️ Editar</button>
+        </div>
+        <div id="rules-search-row">
+          <input type="search" id="rules-search" class="input" placeholder="🔍 Buscar: ladrón, destierro, discusión…" aria-label="Buscar en las reglas">
+        </div>
+        <ol id="rules-list" class="rules"></ol>
+        <div id="rules-edit-tools" hidden>
+          <button type="button" id="rule-add" class="btn add-rule">＋ Añadir regla</button>
+          <button type="button" id="rules-reset" class="btn danger subtle">Volver a las reglas de ejemplo</button>
+          <p class="muted small-note">Formato: **negrita** y *cursiva*. Las reglas van en la copia de seguridad.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ MIENTRAS ESPERAS (botón 🎮 de la barra superior) ============ -->
+    <section id="view-fun" class="view">
+      <p id="fun-context" class="fun-context"></p>
+
+      <div class="card">
+        <h2>🔮 Oráculo del dado</h2>
+        <p id="oracle-status" class="oracle-status"></p>
+        <div id="oracle-pick" class="num-grid" aria-label="Tu apuesta"></div>
+        <h3>¿Qué ha salido?</h3>
+        <div id="oracle-roll" class="num-grid roll" aria-label="Suma de los dados"></div>
+        <div class="oracle-foot">
+          <span id="oracle-score" class="muted"></span>
+          <button type="button" id="oracle-undo" class="link-btn" hidden>↩ Deshacer</button>
+        </div>
+        <h3>🎲 Tiradas de la partida</h3>
+        <p id="dice-empty" class="empty">Apunta lo que salga en cada tirada para ver si los dados mienten.</p>
+        <div id="dice-chart" class="chart-box" hidden></div>
+        <p id="dice-caption" class="muted small-note" hidden></p>
+        <p id="dice-key" class="chart-key" hidden><span class="key-bar"></span> han salido <span class="key-line"></span> esperado por probabilidad</p>
+      </div>
+
+      <div class="card">
+        <h2>🗯️ Meter prisa</h2>
+        <p class="muted">¿Alguien tarda una eternidad? Elige a quién (o deja que el azar decida) y pulsa.</p>
+        <div id="rush-targets" class="chip-group"></div>
+        <button type="button" id="rush-btn" class="btn primary big rush-btn">🗯️ ¡Venga ya!</button>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>🧠 Trivial de Catán</h2>
+          <span id="trivia-score" class="muted"></span>
+        </div>
+        <p id="trivia-q" class="trivia-q"></p>
+        <div id="trivia-options" class="trivia-options"></div>
+        <p id="trivia-feedback" class="trivia-feedback" aria-live="polite"></p>
+        <button type="button" id="trivia-next" class="btn" hidden>Siguiente pregunta →</button>
+      </div>
+
+      <div class="card">
+        <h2>🎯 Ruleta de la mesa</h2>
+        <label class="field">¿Qué hay que decidir?
+          <select id="wheel-questions"></select>
+        </label>
+        <div id="wheel-players" class="wheel"></div>
+        <button type="button" id="wheel-spin" class="btn primary">🎯 Girar</button>
+        <p id="wheel-result" class="wheel-result" aria-live="polite"></p>
+      </div>
+    </section>
+
     <!-- ============ AJUSTES ============ -->
     <section id="view-settings" class="view">
       <div class="card">
         <h2>Instalar en el móvil</h2>
         <p id="install-status" class="muted"></p>
-        <button id="install-btn" class="btn primary" hidden>📲 Instalar app</button>
+        <button type="button" id="install-btn" class="btn primary install-trigger" hidden>📲 Instalar app</button>
+      </div>
+      <div class="card">
+        <h2>Apariencia</h2>
+        <div id="theme-switch" class="segmented" role="group" aria-label="Tema">
+          <button type="button" data-theme="auto">🌓 Auto</button>
+          <button type="button" data-theme="light">☀️ Claro</button>
+          <button type="button" data-theme="dark">🌙 Oscuro</button>
+        </div>
+        <p class="muted small-note">«Auto» sigue el modo del móvil.</p>
+      </div>
+      <div class="card">
+        <h2>Temporadas</h2>
+        <label class="field">La clasificación se reinicia
+          <select id="season-mode"></select>
+        </label>
+        <p class="muted small-note">El historial nunca se borra: cada temporada tiene su clasificación y su campeón.</p>
       </div>
       <div class="card">
         <h2>Copia de seguridad</h2>
-        <p class="muted">Los datos viven en el navegador (localStorage). Exporta para no perderlos o pasarlos a otro móvil.</p>
+        <p class="muted">Los datos viven en el navegador (localStorage). Exporta para no perderlos o pasarlos a otro móvil. Las fotos de las partidas se quedan en este dispositivo y no van en la copia.</p>
         <div class="row">
           <button id="export-btn" class="btn">⬇ Exportar JSON</button>
           <label class="btn">
@@ -114,20 +363,49 @@
         <button id="reset-games" class="btn danger">Borrar historial de partidas</button>
         <button id="reset-decks" class="btn danger">Restaurar tablas originales</button>
       </div>
+      <p class="version">Catán Tracker · versión <span id="app-version"></span></p>
     </section>
   </main>
 
   <nav class="tabbar">
+    <button data-view="game"><span>🎲</span>Partida</button>
     <button data-view="tracker" class="active"><span>🏆</span>Tracker</button>
+    <button data-view="stats"><span>📊</span>Stats</button>
     <button data-view="tables"><span>🎴</span>Holy Table</button>
     <button data-view="settings"><span>⚙️</span>Ajustes</button>
   </nav>
 
   <div id="toast" class="toast" role="status"></div>
 
+  <!-- Visor de fotos -->
+  <dialog id="photo-viewer" class="photo-viewer">
+    <img alt="Foto de la partida">
+    <p class="viewer-caption"></p>
+    <div class="viewer-actions">
+      <button type="button" class="btn" data-act="share">📤 Compartir</button>
+      <button type="button" class="btn" data-act="change">📷 Cambiar</button>
+      <button type="button" class="btn" data-act="delete">🗑️ Borrar</button>
+      <button type="button" class="btn primary" data-act="close">Cerrar</button>
+    </div>
+  </dialog>
+
+  <!-- Meter prisa: pantalla completa (toca para cerrar) -->
+  <div id="rush-overlay" class="rush-overlay" role="alertdialog" aria-label="Meter prisa" hidden>
+    <p class="rush-text"></p>
+    <p class="rush-count"></p>
+    <p class="rush-hint">Toca para cerrar</p>
+  </div>
+
   <script src="js/storage.js"></script>
+  <script src="js/stats.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/photos.js"></script>
   <script src="js/tracker.js"></script>
   <script src="js/tables.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/profile.js"></script>
+  <script src="js/rules.js"></script>
+  <script src="js/fun.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

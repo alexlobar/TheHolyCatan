@@ -13,8 +13,7 @@ const Tables = (() => {
   const cardOf = slot => slot && state().decks[slot.deck]?.cards.find(c => c.id === slot.card);
   const usable = c => c.enabled && c.name.trim();
   const randomItem = arr => arr[Math.floor(Math.random() * arr.length)];
-  // Texto escapado con *cursivas* estilo Markdown.
-  const rich = s => Tracker.esc(s || '').replace(/\*(.+?)\*/g, '<em>$1</em>');
+  const { esc, rich } = Stats;
 
   // Todas las cartas sorteables de las tablas elegidas, como { deck, card }.
   const drawPool = () => draw().tables.flatMap(deck =>
@@ -59,9 +58,25 @@ const Tables = (() => {
     renderDrawTables();
   }
 
+  // Copia de la mesa actual con los datos de cada carta (para el modo partida y el historial).
+  function snapshot() {
+    return draw().slots.map((slot, i) => {
+      const card = cardOf(slot);
+      return card && {
+        color: COLORS[i].id, deck: slot.deck, card: card.id, name: card.name, desc: card.desc,
+        cost: card.cost || '', benefit: card.benefit || '', rounds: card.rounds || 0,
+      };
+    }).filter(Boolean);
+  }
+
+  // Todas las cartas con duración (para añadir penalizaciones a mano en el modo partida).
+  const timedCards = () => TABLES.flatMap(t => state().decks[t.id].cards
+    .filter(c => c.rounds > 0 && c.name.trim())
+    .map(c => ({ deck: t.id, card: c.id, name: c.name, rounds: c.rounds })));
+
   function newGame() {
     const pool = drawPool();
-    if (!pool.length) return App.toast('No hay cartas activas en las tablas elegidas');
+    if (!pool.length) { App.toast('No hay cartas activas en las tablas elegidas'); return false; }
     // Fisher–Yates
     for (let i = pool.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -71,6 +86,7 @@ const Tables = (() => {
     Storage.save();
     renderSlots(true);
     if (pool.length < COLORS.length) App.toast(`Solo hay ${pool.length} cartas disponibles; añade más a los mazos`);
+    return true;
   }
 
   function rerollSlot(i) {
@@ -99,10 +115,11 @@ const Tables = (() => {
   function extras(def, card) {
     if (!def.extended || !(card.cost || card.benefit)) return '';
     return `<div class="pills">
-      ${card.cost ? `<span class="pill cost">Tú: ${Tracker.esc(card.cost)}</span>` : ''}
-      ${card.benefit ? `<span class="pill benefit">Resto: ${Tracker.esc(card.benefit)}</span>` : ''}
+      ${card.cost ? `<span class="pill cost">Tú: ${esc(card.cost)}</span>` : ''}
+      ${card.benefit ? `<span class="pill benefit">Resto: ${esc(card.benefit)}</span>` : ''}
     </div>`;
   }
+  const roundsPill = card => card.rounds > 0 ? `<span class="pill rounds">⏳ ${card.rounds} ${card.rounds === 1 ? 'ronda' : 'rondas'}</span>` : '';
 
   function renderSlots(animate = false) {
     const list = $('#table-list');
@@ -117,15 +134,15 @@ const Tables = (() => {
       const card = cardOf(slot);
       const def = card && defOf(slot.deck);
       return `
-        <li data-i="${i}" class="slot ${animate ? 'flip' : ''}" style="--slot:${color.hex};animation-delay:${animate ? i * 80 : 0}ms">
+        <li data-i="${i}" class="slot ${animate ? 'flip' : ''}" style="--slot:var(--c-${color.id});animation-delay:${animate ? i * 80 : 0}ms">
           <div class="slot-color"><span>${color.name}</span></div>
           <div class="info">
             ${card ? `
               <div class="slot-head">
-                <span class="name">${Tracker.esc(card.name)}</span>
+                <span class="name">${esc(card.name)}</span>
                 <span class="origin origin-${def.id}">${def.icon} ${def.short}</span>
               </div>
-              ${extras(def, card)}
+              ${extras(def, card)}${card.rounds > 0 ? `<div class="pills">${roundsPill(card)}</div>` : ''}
               <div class="desc">${rich(card.desc)}</div>`
             : '<div class="desc">Sin habilidad. Pulsa ↻ para asignar una.</div>'}
           </div>
@@ -165,16 +182,20 @@ const Tables = (() => {
     list.innerHTML = cards.map(c => `
       <li class="${c.enabled ? '' : 'off'}" data-id="${c.id}">
         <div class="holy-head">
-          <input type="text" data-field="name" value="${Tracker.esc(c.name)}" maxlength="40" placeholder="Nombre de la carta" aria-label="Nombre de la carta">
+          <input type="text" data-field="name" value="${esc(c.name)}" maxlength="40" placeholder="Nombre de la carta" aria-label="Nombre de la carta">
           <label class="toggle"><input type="checkbox" data-field="enabled" ${c.enabled ? 'checked' : ''}> Activa</label>
           <button class="del" aria-label="Borrar carta">🗑️</button>
         </div>
         ${def.extended ? `
         <div class="extra-fields">
-          <input type="text" data-field="cost" value="${Tracker.esc(c.cost || '')}" maxlength="40" placeholder="Coste para ti" aria-label="Coste para ti">
-          <input type="text" data-field="benefit" value="${Tracker.esc(c.benefit || '')}" maxlength="40" placeholder="Beneficio para el resto" aria-label="Beneficio para el resto">
+          <input type="text" data-field="cost" value="${esc(c.cost || '')}" maxlength="40" placeholder="Coste para ti" aria-label="Coste para ti">
+          <input type="text" data-field="benefit" value="${esc(c.benefit || '')}" maxlength="40" placeholder="Beneficio para el resto" aria-label="Beneficio para el resto">
         </div>` : ''}
-        <textarea data-field="desc" maxlength="300" placeholder="¿Qué hace esta carta? (*texto* = cursiva)" aria-label="Efecto de la carta">${Tracker.esc(c.desc)}</textarea>
+        <textarea data-field="desc" maxlength="300" placeholder="¿Qué hace esta carta? (*texto* = cursiva)" aria-label="Efecto de la carta">${esc(c.desc)}</textarea>
+        <label class="rounds-field">⏳ Dura
+          <input type="number" data-field="rounds" value="${c.rounds || 0}" min="0" max="20" inputmode="numeric" aria-label="Duración en rondas">
+          rondas <span class="hint">(0 = efecto inmediato)</span>
+        </label>
       </li>`).join('');
 
     list.querySelectorAll('[data-field]').forEach(el => {
@@ -187,7 +208,9 @@ const Tables = (() => {
     const li = e.target.closest('li');
     const card = byId(li.dataset.id);
     const field = e.target.dataset.field;
-    card[field] = field === 'enabled' ? e.target.checked : e.target.value;
+    card[field] = field === 'enabled' ? e.target.checked
+      : field === 'rounds' ? Math.max(0, Math.min(20, parseInt(e.target.value, 10) || 0))
+      : e.target.value;
     if (field === 'enabled') li.classList.toggle('off', !card.enabled);
     $('#deck-count').textContent = countText();
     if (onTable({ deck: current, card: card.id }, draw().slots)) renderSlots();
@@ -224,5 +247,5 @@ const Tables = (() => {
     render();
   }
 
-  return { init, render, reset };
+  return { init, render, reset, newGame, snapshot, timedCards };
 })();

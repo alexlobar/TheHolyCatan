@@ -1,70 +1,182 @@
 // Arranque, navegación por pestañas, ajustes y utilidades comunes.
 const App = (() => {
+  // Debe coincidir con CACHE en sw.js y data-build en index.html.
+  const VERSION = '1.3.0';
+  const BANNER_KEY = 'catan-install-banner-closed';
   const $ = sel => document.querySelector(sel);
   let toastTimer;
 
+  /* Chrome Android (≤157) dice «ya está instalada» en el menú ⋮ si hay OTRA app instalada
+     en el mismo dominio (TU-USUARIO.github.io). beforeinstallprompt sí mira la carpeta:
+     lo capturamos en cuanto carga el script y lo ofrecemos con un botón propio. */
+  let installPrompt = null;
+  let installed = false;
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault(); // sin mini-barra de Chrome: usamos nuestros botones
+    installPrompt = e;
+    renderInstall();
+  });
+  window.addEventListener('appinstalled', () => {
+    installPrompt = null;
+    installed = true;
+    renderInstall();
+  });
+
   function init() {
     Storage.load();
-    Tracker.init();
+    initTheme();
     Tables.init();
+    Tracker.init();
+    Game.init();
+    Profile.init();
+    Rules.init();
+    Fun.init();
+    Photos.initViewer();
     initTabs();
     initSettings();
     initInstall();
   }
 
-  // Instalación como app: service worker (offline) + botón en Android + instrucciones en iOS.
+  // Vuelve a pintar todas las vistas tras un cambio de datos.
+  function refresh() {
+    Tracker.render();
+    Tables.render();
+    Game.render();
+    Profile.render();
+    Rules.render();
+    Fun.render();
+  }
+
+  // Compartir texto (+ foto si la hay) con la hoja nativa del móvil (WhatsApp, Telegram…); si no hay, copiar.
+  async function share(text, file = null) {
+    if (navigator.share) {
+      const data = file && navigator.canShare?.({ files: [file] }) ? { text, files: [file] } : { text };
+      try { await navigator.share(data); return; }
+      catch (e) { if (e.name === 'AbortError') return; }
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      toast('📋 Resumen copiado: pégalo en WhatsApp');
+    } catch {
+      prompt('Copia el resumen:', text);
+    }
+  }
+
+  // ---------- Tema claro / oscuro ----------
+  // Preferencia de este dispositivo (no va en la copia de seguridad).
+  const THEME_KEY = 'catan-app-theme';
+  const darkQuery = matchMedia('(prefers-color-scheme: dark)');
+
+  function getTheme() {
+    try { return localStorage.getItem(THEME_KEY) || 'auto'; } catch { return 'auto'; }
+  }
+
+  function applyTheme(theme) {
+    const root = document.documentElement;
+    if (theme === 'light' || theme === 'dark') root.dataset.theme = theme;
+    else delete root.dataset.theme;
+    const dark = theme === 'dark' || (theme === 'auto' && darkQuery.matches);
+    document.querySelector('meta[name="theme-color"]').content = dark ? '#7d3420' : '#b5462a';
+    document.querySelectorAll('#theme-switch button').forEach(b => {
+      const on = b.dataset.theme === theme;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-pressed', on);
+    });
+  }
+
+  function initTheme() {
+    applyTheme(getTheme());
+    darkQuery.addEventListener('change', () => applyTheme(getTheme()));
+    $('#theme-switch').addEventListener('click', e => {
+      const b = e.target.closest('[data-theme]');
+      if (!b) return;
+      try { localStorage.setItem(THEME_KEY, b.dataset.theme); } catch {}
+      applyTheme(b.dataset.theme);
+    });
+  }
+
+  // Instalación como app: service worker (offline) + botón propio en Android + instrucciones en iOS.
   function initInstall() {
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {
       navigator.serviceWorker.register('./sw.js').catch(e => console.warn('Service worker no registrado', e));
     }
+    $('#app-version').textContent = VERSION;
 
+    document.querySelectorAll('.install-trigger').forEach(b => b.addEventListener('click', install));
+    $('#install-banner .banner-close').addEventListener('click', () => {
+      try { localStorage.setItem(BANNER_KEY, '1'); } catch {}
+      renderInstall();
+    });
+    renderInstall();
+  }
+
+  async function install() {
+    if (!installPrompt) return;
+    const ev = installPrompt;
+    installPrompt = null; // cada aviso solo se puede usar una vez
+    renderInstall();
+    ev.prompt();
+    try { await ev.userChoice; } catch {}
+  }
+
+  function renderInstall() {
     const status = $('#install-status');
-    const btn = $('#install-btn');
-    const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+    if (!status) return; // el aviso puede llegar antes de que exista el DOM; se pinta en initInstall()
+
+    const standalone = installed || matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
     const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    let closed = false;
+    try { closed = localStorage.getItem(BANNER_KEY) === '1'; } catch {}
+
+    $('#install-btn').hidden = !installPrompt;
+    $('#install-banner').hidden = !installPrompt || closed;
 
     if (standalone) {
-      status.textContent = '✔ Ya estás usando la app instalada.';
+      status.textContent = installed
+        ? '✔ App instalada. Ábrela desde la pantalla de inicio.'
+        : '✔ Ya estás usando la app instalada.';
     } else if (ios) {
       status.innerHTML = 'iPhone / iPad: abre esta página en <b>Safari</b>, pulsa <b>Compartir</b> (el cuadrado con la flecha ↑) y elige <b>Añadir a pantalla de inicio</b>.';
+    } else if (installPrompt) {
+      status.innerHTML = 'Pulsa <b>Instalar app</b> para tenerla en la pantalla de inicio y usarla sin conexión.';
     } else {
-      status.innerHTML = 'Android: en Chrome, abre el menú <b>⋮</b> → <b>Instalar aplicación</b> (o <b>Añadir a pantalla de inicio</b>). Si aparece el botón de abajo, también sirve.';
+      status.innerHTML = 'Android: abre esta dirección <b>en Chrome</b> (no desde otra app instalada) y recarga una o dos veces hasta que aparezca el botón <b>Instalar app</b>. No uses el menú ⋮: si tienes otra app de github.io instalada, Chrome dice por error «ya está instalada».';
     }
+  }
 
-    let deferred = null;
-    window.addEventListener('beforeinstallprompt', e => {
-      e.preventDefault();
-      deferred = e;
-      btn.hidden = false;
+  // Cambia de vista. Las de la barra superior (📜 Reglas, 🎮 Mientras esperas) no están en la inferior.
+  function show(view) {
+    document.querySelectorAll('[data-view]').forEach(b => {
+      const on = b.dataset.view === view;
+      b.classList.toggle('active', on);
+      if (b.closest('.topbar')) b.setAttribute('aria-pressed', on);
     });
-    btn.addEventListener('click', async () => {
-      if (!deferred) return;
-      btn.hidden = true;
-      deferred.prompt();
-      await deferred.userChoice;
-      deferred = null;
-    });
-    window.addEventListener('appinstalled', () => {
-      btn.hidden = true;
-      status.textContent = '✔ App instalada. Ábrela desde la pantalla de inicio.';
-    });
+    document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === `view-${view}`));
+    try { localStorage.setItem('catan-app-tab', view); } catch {}
+    refresh(); // por si otra pestaña cambió datos (p. ej. una mesa nueva en la Holy Table)
+    window.scrollTo(0, 0);
   }
 
   function initTabs() {
-    const buttons = document.querySelectorAll('.tabbar button');
-    const show = view => {
-      buttons.forEach(b => b.classList.toggle('active', b.dataset.view === view));
-      document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === `view-${view}`));
-      try { localStorage.setItem('catan-app-tab', view); } catch {}
-      window.scrollTo(0, 0);
-    };
-    buttons.forEach(b => b.addEventListener('click', () => show(b.dataset.view)));
+    document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => show(b.dataset.view)));
     let last = null;
     try { last = localStorage.getItem('catan-app-tab'); } catch {}
+    // Con una partida en curso se abre directamente en ella.
+    if (Storage.get().current) last = 'game';
     if (last && $(`#view-${last}`)) show(last);
   }
 
   function initSettings() {
+    const seasonSel = $('#season-mode');
+    seasonSel.innerHTML = Object.entries(Stats.SEASON_MODES).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
+    seasonSel.value = Storage.get().settings.seasonMode;
+    seasonSel.addEventListener('change', () => {
+      Storage.get().settings.seasonMode = seasonSel.value;
+      Storage.save();
+      refresh();
+      toast('Temporadas: ' + Stats.SEASON_MODES[seasonSel.value].toLowerCase());
+    });
+
     $('#export-btn').addEventListener('click', () => {
       const blob = new Blob([JSON.stringify(Storage.get(), null, 2)], { type: 'application/json' });
       const a = document.createElement('a');
@@ -79,9 +191,9 @@ const App = (() => {
       if (!file) return;
       try {
         Storage.replace(JSON.parse(await file.text()));
+        $('#season-mode').value = Storage.get().settings.seasonMode;
         Tracker.resetForm();
-        Tracker.render();
-        Tables.render();
+        refresh();
         toast('Datos importados ✔');
       } catch {
         toast('Ese archivo no es una copia válida');
@@ -113,5 +225,5 @@ const App = (() => {
   }
 
   document.addEventListener('DOMContentLoaded', init);
-  return { toast };
+  return { toast, refresh, share, show };
 })();

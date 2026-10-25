@@ -1,26 +1,33 @@
-// Tracker de victorias/derrotas: una partida = participantes + ganador.
-// El ganador suma una victoria; el resto de participantes, una derrota.
+// Tracker: registro rápido de partidas, clasificación por temporada, campeones e historial.
 const Tracker = (() => {
   const $ = sel => document.querySelector(sel);
+  const { esc, toRoman, medal } = Stats;
   let selected = new Set();
   let winner = null;
+  let season = null; // temporada elegida en el selector (null = la actual)
+
+  const state = () => Storage.get();
+  const mode = () => state().settings.seasonMode;
 
   function init() {
-    $('#game-date').value = today();
+    $('#game-date').value = Stats.today();
     $('#game-form').addEventListener('submit', onSubmit);
+    $('#season-select').addEventListener('change', e => { season = e.target.value; renderRanking(); });
     resetForm();
     render();
   }
 
+  // ---------- Registro rápido ----------
+
   function resetForm() {
-    selected = new Set(Storage.get().players);
+    selected = new Set(state().players);
     winner = null;
     $('#game-note').value = '';
     renderChips();
   }
 
   function renderChips() {
-    const players = Storage.get().players;
+    const players = state().players;
 
     $('#participants').replaceChildren(...players.map(p => chip(p, selected.has(p), '', () => {
       selected.has(p) ? selected.delete(p) : selected.add(p);
@@ -33,6 +40,9 @@ const Tracker = (() => {
       c.disabled = !selected.has(p);
       return c;
     }));
+
+    // Solo se ofrece guardar las habilidades si hay mesa sorteada en la Holy Table.
+    $('#with-abilities-row').hidden = !Tables.snapshot().length;
   }
 
   function chip(label, on, extra, onClick) {
@@ -49,64 +59,78 @@ const Tracker = (() => {
     if (selected.size < 2) return App.toast('Selecciona al menos 2 jugadores');
     if (!winner) return App.toast('Elige quién ha ganado');
 
-    const state = Storage.get();
-    state.games.unshift({
-      id: Date.now().toString(36),
+    const abilities = !$('#with-abilities-row').hidden && $('#with-abilities').checked
+      ? Tables.snapshot().map(a => ({ color: a.color, deck: a.deck, name: a.name }))
+      : undefined;
+    addGame({
+      id: Storage.uid(),
       date: $('#game-date').value,
       players: [...selected],
       winner,
       note: $('#game-note').value.trim(),
+      ...(abilities ? { abilities } : {}),
     });
-    Storage.save();
     App.toast(`🏆 Victoria para ${winner}`);
     resetForm();
-    render();
   }
 
-  function computeStats() {
-    const { players, games } = Storage.get();
-    const stats = Object.fromEntries(players.map(p => [p, { played: 0, wins: 0 }]));
-    for (const g of games) {
-      for (const p of g.players) {
-        if (!stats[p]) continue;
-        stats[p].played++;
-        if (g.winner === p) stats[p].wins++;
-      }
-    }
-    const rows = players
-      .map(p => ({ name: p, ...stats[p], pct: stats[p].played ? stats[p].wins / stats[p].played : 0 }))
-      .sort((a, b) => b.wins - a.wins || b.pct - a.pct);
-    // Posición con empates compartidos (1, 1, 3, 4): mismas victorias y mismo % = mismo puesto.
-    rows.forEach((r, i) => {
-      const prev = rows[i - 1];
-      r.rank = prev && prev.wins === r.wins && prev.pct === r.pct ? prev.rank : i + 1;
-    });
-    return rows;
+  // Guarda una partida (también la usa el modo partida) y avisa de los logros nuevos.
+  function addGame(game) {
+    const s = state();
+    const before = [...s.games];
+    s.games.unshift(game);
+    Storage.save();
+    const unlocked = Stats.newAchievements(before, s.games, s.players, mode());
+    unlocked.forEach((a, i) => setTimeout(() => App.toast(`${a.icon} Logro para ${a.player}: ${a.name}`), 2400 * (i + 1)));
+    App.refresh();
+    return unlocked;
   }
 
-  // 🥇🥈🥉 y la cuchara de madera 🪵 para el último puesto.
-  const MEDALS = ['🥇', '🥈', '🥉', '🪵'];
+  // ---------- Clasificación y campeones ----------
 
-  function render() {
-    const rows = computeStats();
-    const games = Storage.get().games;
+  function renderRanking() {
+    const { games, players } = state();
+    const m = mode();
+    const keys = Stats.seasons(games, m);
+    const select = $('#season-select');
+    select.hidden = m === 'none';
+    if (!keys.includes(season) && season !== 'all') season = keys[0] || 'all';
+    if (m === 'none') season = 'all';
+    select.innerHTML = [...keys, 'all'].map((k, i) =>
+      `<option value="${k}" ${k === season ? 'selected' : ''}>${Stats.seasonLabel(k)}${i === 0 && k !== 'all' ? ' (actual)' : ''}</option>`).join('');
+
+    const shown = Stats.inSeason(games, season, m);
+    const rows = Stats.ranking(shown, players);
     $('#stats-body').innerHTML = rows.map(r => `
       <tr class="rank-${r.rank}">
-        <td><span class="medal">${games.length ? MEDALS[Math.min(r.rank, MEDALS.length) - 1] : ''}</span>${esc(r.name)}</td>
+        <td><span class="medal">${shown.length ? medal(r.rank) : ''}</span>${esc(r.name)}</td>
         <td>${r.played}</td>
         <td class="roman">${toRoman(r.wins)}</td>
         <td>${Math.round(r.pct * 100)}%</td>
       </tr>`).join('');
+    $('#ranking-empty').hidden = shown.length > 0;
 
+    const champs = Stats.champions(games, players, m);
+    $('#champions-card').hidden = !champs.length;
+    $('#champions').innerHTML = champs.map(c => `
+      <li><span class="season">${esc(c.label)}</span>
+        <span class="champ">🏆 ${c.winners.map(esc).join(' · ')}</span>
+        <span class="roman small">${toRoman(c.wins)}</span></li>`).join('');
+  }
+
+  // ---------- Historial ----------
+
+  function renderHistory() {
+    const games = state().games;
     const list = $('#history');
     if (!games.length) {
       list.innerHTML = '<li class="empty">Aún no hay partidas. ¡A colonizar!</li>';
       return;
     }
-    // Las partidas se guardan de la más nueva a la más antigua; el número es el orden de registro.
     list.innerHTML = games.map((g, i) => {
       const d = g.date ? new Date(g.date + 'T00:00') : null;
       const others = g.players.filter(p => p !== g.winner);
+      const meta = [g.duration && `⏱ ${Stats.fmtDuration(g.duration)}`, g.rounds && `🔁 ${g.rounds} rondas`].filter(Boolean);
       return `
       <li class="game">
         <div class="date-badge">
@@ -117,45 +141,61 @@ const Tracker = (() => {
         <div class="info">
           <div class="game-num">Partida ${toRoman(games.length - i)}</div>
           <div class="win">🏆 ${esc(g.winner)}</div>
-          <div class="players">
-            ${others.map(p => `<span class="tag">${esc(p)}</span>`).join('')}
-          </div>
+          <div class="players">${others.map(p => `<span class="tag">${esc(p)}</span>`).join('')}</div>
+          ${meta.length ? `<div class="game-meta">${meta.join(' · ')}</div>` : ''}
+          ${g.abilities?.length ? `<div class="mini-abilities">${g.abilities.map(a =>
+            `<span class="mini" style="--slot:var(--c-${a.color})">${esc(a.name)}</span>`).join('')}</div>` : ''}
           ${g.note ? `<blockquote class="note">${esc(g.note)}</blockquote>` : ''}
+          ${g.photo ? `<button class="photo-thumb" data-id="${g.id}" aria-label="Ver foto de la partida"><img alt="" data-photo="${g.id}"></button>` : ''}
         </div>
-        <button class="del" data-id="${g.id}" aria-label="Borrar partida">🗑️</button>
+        <div class="game-actions">
+          <button class="icon-btn share" data-id="${g.id}" aria-label="Compartir partida">📤</button>
+          ${g.photo ? '' : `<button class="icon-btn photo" data-id="${g.id}" aria-label="Añadir foto">📷</button>`}
+          <button class="icon-btn del" data-id="${g.id}" aria-label="Borrar partida">🗑️</button>
+        </div>
       </li>`;
     }).join('');
     list.querySelectorAll('.del').forEach(b => b.addEventListener('click', () => removeGame(b.dataset.id)));
+    list.querySelectorAll('.share').forEach(b => b.addEventListener('click', () => shareGame(b.dataset.id)));
+    list.querySelectorAll('.photo').forEach(b => b.addEventListener('click', () => Photos.pick(b.dataset.id)));
+    list.querySelectorAll('.photo-thumb').forEach(b => b.addEventListener('click', () => Photos.view(b.dataset.id)));
+    // Las miniaturas se cargan de IndexedDB después de pintar.
+    list.querySelectorAll('img[data-photo]').forEach(async img => {
+      const u = await Photos.url(img.dataset.photo).catch(() => null);
+      if (u) img.src = u;
+      else img.closest('.photo-thumb').hidden = true; // foto de otro dispositivo (no viaja en la copia)
+    });
+  }
+
+  async function shareGame(id) {
+    const s = state();
+    const g = s.games.find(x => x.id === id);
+    if (!g) return;
+    const file = g.photo ? (Photos.cachedFile(id) || await Photos.file(id).catch(() => null)) : null;
+    App.share(Stats.shareText(s, g), file);
   }
 
   function removeGame(id) {
     if (!confirm('¿Borrar esta partida?')) return;
-    const state = Storage.get();
-    state.games = state.games.filter(g => g.id !== id);
+    const s = state();
+    s.games = s.games.filter(g => g.id !== id);
     Storage.save();
-    render();
+    Photos.remove(id).catch(() => {});
+    App.refresh();
   }
 
   function clearAll() {
-    Storage.get().games = [];
+    state().games = [];
     Storage.save();
-    render();
+    Photos.clear().catch(() => {});
+    App.refresh();
   }
 
-  // Fecha local en formato YYYY-MM-DD (valueAsDate usaría UTC y podría dar el día anterior).
-  const today = () => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  };
-  // 0 no existe en romanos: se muestra un guion.
-  function toRoman(n) {
-    if (!n) return '—';
-    const map = [[1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'], [100, 'C'], [90, 'XC'], [50, 'L'], [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']];
-    let out = '';
-    for (const [v, s] of map) while (n >= v) { out += s; n -= v; }
-    return out;
+  function render() {
+    renderChips();
+    renderRanking();
+    renderHistory();
   }
-  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-  return { init, render, resetForm, clearAll, esc };
+  return { init, render, resetForm, clearAll, addGame, shareGame };
 })();
