@@ -225,9 +225,18 @@ const Tables = (() => {
     $('#deck-list [data-field="name"]').focus();
   }
 
+  // Se borra al momento con «↩ Deshacer» (que también devuelve la mesa como estaba).
   function deleteCard(id) {
     const card = byId(id);
-    if (!confirm(`¿Borrar la carta «${card.name || 'sin nombre'}»?`)) return;
+    const deckId = current;
+    const index = deck().cards.indexOf(card);
+    const slotsBefore = JSON.parse(JSON.stringify(draw().slots));
+    App.undo(`🗑️ Carta «${card.name || 'sin nombre'}» borrada`, () => {
+      state().decks[deckId].cards.splice(index, 0, card);
+      draw().slots = slotsBefore;
+      Storage.save();
+      render();
+    });
     deck().cards = deck().cards.filter(c => c.id !== id);
     // Si estaba en la mesa, ese color recibe otra habilidad (o se queda vacío si no quedan).
     const slots = draw().slots;

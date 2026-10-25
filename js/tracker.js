@@ -15,6 +15,8 @@ const Tracker = (() => {
     $('#season-select').addEventListener('change', e => { season = e.target.value; renderRanking(); });
     $('#wrapped-open').addEventListener('click', () => Wrapped.open(season));
     $('#league-share').addEventListener('click', () => App.share(Stats.leagueText(state(), season)));
+    $('#league-image').addEventListener('click', () => Img.share(season));
+    initEdit();
     resetForm();
     render();
   }
@@ -91,6 +93,7 @@ const Tracker = (() => {
     Storage.save();
     const unlocked = Stats.newAchievements(before, Stats.valid(s.games), s.players, mode());
     unlocked.forEach((a, i) => setTimeout(() => App.toast(`${a.icon} Logro para ${a.player}: ${a.name}`), 2400 * (i + 1)));
+    Backup.gameAdded(); // copia automática + aviso cada 10 partidas sin copia fuera del móvil
     App.refresh();
     return unlocked;
   }
@@ -133,6 +136,8 @@ const Tracker = (() => {
     $('#wrapped-open').hidden = !any;
     $('#wrapped-open').textContent = `🎁 Wrapped · ${Stats.seasonLabel(season)}`;
     $('#league-share').hidden = !any;
+    $('#league-image').hidden = !any;
+    renderPrediction(games, players);
 
     const champs = Stats.champions(games, players, m);
     $('#champions-card').hidden = !champs.length;
@@ -140,6 +145,99 @@ const Tracker = (() => {
       <li><span class="season">${esc(c.label)}</span>
         <span class="champ">🏆 ${c.winners.map(n => esc(who(n))).join(' · ')}</span>
         <span class="roman small">${toRoman(c.wins)}</span></li>`).join('');
+  }
+
+  // ---------- 🔮 Predicción de campeón del año en curso ----------
+
+  let lastPrediction = { key: null, data: null };
+
+  function renderPrediction(games, players) {
+    const year = String(new Date().getFullYear());
+    // Solo se recalcula si cambian los datos (la simulación tiene algo de azar: así no «baila»).
+    const key = JSON.stringify([games.length, games[0]?.id, Storage.get().legacy?.[year]]);
+    if (lastPrediction.key !== key) lastPrediction = { key, data: Stats.predict(games, players, year) };
+    const p = lastPrediction.data;
+    $('#prediction-card').hidden = !p;
+    if (!p) return;
+    $('#prediction-meta').textContent = p.remaining
+      ? `A este ritmo, el ${p.year} acabará con unas ${p.projected} partidas: quedan ~${p.remaining}.`
+      : `El ritmo del ${p.year} no deja partidas pendientes: lo que hay ahora es casi definitivo.`;
+    const top = Math.max(...p.rows.map(r => r.prob), 0.01);
+    $('#prediction').innerHTML = p.rows.map(r => `
+      <li class="${r.guest ? 'guest' : ''}">
+        <span class="pr-name">${esc(who(r.name))}</span>
+        <span class="pr-bar"><i style="width:${(r.prob / top) * 100}%"></i></span>
+        <b class="pr-prob">${r.prob >= 0.995 ? '>99' : r.prob > 0 && r.prob < 0.005 ? '<1' : Math.round(r.prob * 100)}%</b>
+        <span class="pr-detail">ahora ${toRoman(r.wins)} · acabaría con ~${toRoman(r.expected)}</span>
+      </li>`).join('');
+  }
+
+  // ---------- ✏️ Editar partida ----------
+
+  let editing = null; // { id, players: Set, winner }
+
+  function initEdit() {
+    const dlg = $('#edit-game');
+    dlg.querySelector('[data-act="cancel"]').addEventListener('click', () => dlg.close());
+    dlg.querySelector('form').addEventListener('submit', e => { e.preventDefault(); saveEdit(); });
+    dlg.querySelector('#edit-players').addEventListener('click', e => {
+      const b = e.target.closest('[data-p]');
+      if (!b) return;
+      const p = b.dataset.p;
+      editing.players.has(p) ? editing.players.delete(p) : editing.players.add(p);
+      if (!editing.players.has(editing.winner)) editing.winner = null;
+      renderEditChips();
+    });
+    dlg.querySelector('#edit-winner').addEventListener('click', e => {
+      const b = e.target.closest('[data-p]');
+      if (b && !b.disabled) { editing.winner = b.dataset.p; renderEditChips(); }
+    });
+  }
+
+  function openEdit(id) {
+    const g = state().games.find(x => x.id === id);
+    if (!g) return;
+    editing = { id, players: new Set(g.players), winner: g.winner };
+    const dlg = $('#edit-game');
+    dlg.querySelector('#edit-title').textContent = `✏️ Partida ${toRoman(Stats.gameNumber(state().games, g))}`;
+    dlg.querySelector('#edit-date').value = g.date || '';
+    dlg.querySelector('#edit-note').value = g.note || '';
+    dlg.querySelector('#edit-duration').value = g.duration ? Math.round(g.duration / 60) : '';
+    dlg.querySelector('#edit-rounds').value = g.rounds || '';
+    renderEditChips();
+    if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
+  }
+
+  function renderEditChips() {
+    // Jugadores de la app + los que tuviera la partida (por si alguno ya no está en la lista).
+    const all = [...new Set([...state().players, ...editing.players])];
+    $('#edit-players').innerHTML = all.map(p =>
+      `<button type="button" class="chip small ${editing.players.has(p) ? 'on' : ''}" data-p="${esc(p)}">${esc(who(p))}</button>`).join('');
+    $('#edit-winner').innerHTML = all.map(p =>
+      `<button type="button" class="chip small winner ${editing.winner === p ? 'on' : ''}" data-p="${esc(p)}" ${editing.players.has(p) ? '' : 'disabled'}>${esc(who(p))}</button>`).join('');
+    const founders = [...editing.players].filter(p => Storage.FOUNDERS.includes(p)).length;
+    $('#edit-warning').hidden = founders >= Storage.MIN_FOUNDERS;
+  }
+
+  function saveEdit() {
+    if (editing.players.size < 2) return App.toast('Selecciona al menos 2 jugadores');
+    if (!editing.winner) return App.toast('Elige quién ganó');
+    const g = state().games.find(x => x.id === editing.id);
+    if (!g) return;
+    const dlg = $('#edit-game');
+    const mins = parseInt(dlg.querySelector('#edit-duration').value, 10);
+    const rounds = parseInt(dlg.querySelector('#edit-rounds').value, 10);
+    g.date = dlg.querySelector('#edit-date').value || g.date;
+    g.players = [...editing.players];
+    g.winner = editing.winner;
+    g.note = dlg.querySelector('#edit-note').value.trim();
+    if (mins > 0) g.duration = mins * 60; else delete g.duration;
+    if (rounds > 0) g.rounds = rounds; else delete g.rounds;
+    Storage.save();
+    dlg.close();
+    Backup.snapshot('Partida editada');
+    App.refresh();
+    App.toast('✏️ Partida actualizada');
   }
 
   // ---------- Historial ----------
@@ -175,6 +273,7 @@ const Tracker = (() => {
         </div>
         <div class="game-actions">
           <button class="icon-btn share" data-id="${g.id}" aria-label="Compartir partida">📤</button>
+          <button class="icon-btn edit" data-id="${g.id}" aria-label="Editar partida">✏️</button>
           ${g.photo ? '' : `<button class="icon-btn photo" data-id="${g.id}" aria-label="Añadir foto">📷</button>`}
           <button class="icon-btn del" data-id="${g.id}" aria-label="Borrar partida">🗑️</button>
         </div>
@@ -182,6 +281,7 @@ const Tracker = (() => {
     }).join('');
     list.querySelectorAll('.del').forEach(b => b.addEventListener('click', () => removeGame(b.dataset.id)));
     list.querySelectorAll('.share').forEach(b => b.addEventListener('click', () => shareGame(b.dataset.id)));
+    list.querySelectorAll('.edit').forEach(b => b.addEventListener('click', () => openEdit(b.dataset.id)));
     list.querySelectorAll('.photo').forEach(b => b.addEventListener('click', () => Photos.pick(b.dataset.id)));
     list.querySelectorAll('.photo-thumb').forEach(b => b.addEventListener('click', () => Photos.view(b.dataset.id)));
     // Las miniaturas se cargan de IndexedDB después de pintar.
@@ -200,13 +300,20 @@ const Tracker = (() => {
     App.share(Stats.shareText(s, g), file);
   }
 
+  // Se borra al momento con «↩ Deshacer»; la foto solo se borra de verdad si no se deshace.
   function removeGame(id) {
-    if (!confirm('¿Borrar esta partida?')) return;
     const s = state();
-    s.games = s.games.filter(g => g.id !== id);
+    const index = s.games.findIndex(g => g.id === id);
+    if (index === -1) return;
+    const [game] = s.games.splice(index, 1);
     Storage.save();
-    Photos.remove(id).catch(() => {});
+    Backup.snapshot('Partida borrada');
     App.refresh();
+    App.undo(`🗑️ Partida ${toRoman(s.games.length - index + 1)} borrada`, () => {
+      state().games.splice(index, 0, game);
+      Storage.save();
+      App.refresh();
+    }, () => { if (game.photo) Photos.remove(id).catch(() => {}); });
   }
 
   function clearAll() {

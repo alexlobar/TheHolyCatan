@@ -309,6 +309,49 @@ const Stats = (() => {
     return { years, byYear, names, totalGames, totals, busiest: byYear.reduce((b, y) => (!b || y.games > b.games ? y : b), null) };
   }
 
+  // ---------- Predicción de campeón ----------
+
+  /* ¿Quién ganará el año? Con el ritmo de partidas del año (partidas / fracción del año
+     transcurrida) se estiman las que faltan, y se simulan miles de veces: en cada partida
+     simulada gana cada jugador con probabilidad proporcional a sus victorias del año (+1,
+     para no dar 0 % a nadie). Devuelve null si el año ya terminó o hay pocas partidas. */
+  function predict(games, players, year = String(new Date().getFullYear()), sims = 4000) {
+    const h = history(games, players);
+    const y = h.byYear.find(x => x.year === year);
+    if (!y || y.games < 5) return null;
+    const start = new Date(+year, 0, 1), end = new Date(+year + 1, 0, 1), now = new Date();
+    const frac = (now - start) / (end - start);
+    if (frac <= 0 || frac >= 1) return null;
+
+    const projected = Math.max(y.games, Math.round(y.games / frac));
+    const remaining = projected - y.games;
+    const names = h.names.filter(n => players.includes(n) || y.wins[n] > 0);
+    const weights = names.map(n => y.wins[n] + 1);
+    const totalW = weights.reduce((a, b) => a + b, 0);
+    const firsts = Object.fromEntries(names.map(n => [n, 0]));
+
+    for (let s = 0; s < sims; s++) {
+      const w = names.map(n => y.wins[n]);
+      for (let g = 0; g < remaining; g++) {
+        let r = Math.random() * totalW, k = 0;
+        while (r >= weights[k]) { r -= weights[k]; k++; }
+        w[k]++;
+      }
+      const top = Math.max(...w);
+      const leaders = names.filter((n, i) => w[i] === top);
+      leaders.forEach(n => { firsts[n] += 1 / leaders.length; }); // empate: se reparte
+    }
+
+    const rows = names.map((n, i) => ({
+      name: n,
+      guest: !players.includes(n),
+      wins: y.wins[n],
+      expected: Math.round(y.wins[n] + (weights[i] / totalW) * remaining),
+      prob: firsts[n] / sims,
+    })).sort((a, b) => b.prob - a.prob || b.wins - a.wins);
+    return { year, played: y.games, projected, remaining, rows };
+  }
+
   // Bloques de WhatsApp para el gráfico de evolución de un periodo ('all' = todos los años).
   function legacyBaselines(key, mode) {
     const L = Storage.get()?.legacy || {};
@@ -624,7 +667,7 @@ const Stats = (() => {
     esc, rich, toRoman, MEDALS, medal, rowMedal, today, fmtDate, fmtMonth, fmtDuration, pct, pctText, joinNames, chrono, gameNumber,
     SEASON_MODES, seasonKey, seasonLabel, currentSeason, inSeason, seasons,
     isValid, valid, foundersIn, legacyOf, legacyTotal, who,
-    ranking, seasonRanking, champions, profile, evolution, history, legacyBaselines, streaks, records, TITLES, titles, wrapped, wrappedText,
+    ranking, seasonRanking, champions, profile, evolution, history, predict, legacyBaselines, streaks, records, TITLES, titles, wrapped, wrappedText,
     abilityStats, ACHIEVEMENTS, achievements, newAchievements, leagueText, shareText,
   };
 })();

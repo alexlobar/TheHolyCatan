@@ -3,6 +3,10 @@
 //  · Parejas de recursos: memory de 12 cartas.
 //  · Generador de tableros: tablero aleatorio (6 y 8 nunca juntos) para la próxima partida.
 //  · Ruleta de la mesa: elige a alguien al azar.
+//  · Mayor o menor: con 2 dados, ¿la próxima tirada será mayor o menor?
+//  · Simón de recursos: repite la secuencia, cada vez más larga.
+//  · ¿Te llega?: ¿con esa mano puedes construir eso? Sí/No contra el reloj.
+//  · Tragaperras del puerto: 3 rodillos de recursos con premios.
 const Fun = (() => {
   const $ = sel => document.querySelector(sel);
   const { esc } = Stats;
@@ -20,16 +24,25 @@ const Fun = (() => {
     return a;
   };
 
-  let best = { sheep: 0, memory: 0 }; // memory: menos movimientos = mejor (0 = sin récord)
+  // memory: menos movimientos = mejor (0 = sin récord) · coins: récord de monedas en la tragaperras
+  let best = { sheep: 0, memory: 0, hilo: 0, simon: 0, build: 0, coins: 0 };
   function loadBest() { try { best = { ...best, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; } catch {} }
   function saveBest() { try { localStorage.setItem(KEY, JSON.stringify(best)); } catch {} }
 
+  // Cada juego arranca por separado: si uno falla, los demás siguen.
   function init() {
     loadBest();
-    initSheep();
-    initMemory();
-    initBoard();
-    initWheel();
+    for (const [name, fn] of [['ovejas', initSheep], ['parejas', initMemory], ['tableros', initBoard], ['ruleta', initWheel],
+      ['mayor o menor', initHilo], ['simón', initSimon], ['¿te llega?', initBuild], ['tragaperras', initSlots]]) {
+      try { fn(); } catch (e) { console.error(`Juego ${name}`, e); }
+    }
+    // Atajos arriba para saltar a cada juego.
+    $('#fun-nav').addEventListener('click', e => {
+      const b = e.target.closest('[data-go]');
+      if (!b) return;
+      const card = document.getElementById(b.dataset.go);
+      if (card) window.scrollTo({ top: card.getBoundingClientRect().top + window.scrollY - 70, behavior: 'smooth' });
+    });
     render();
   }
 
@@ -40,8 +53,16 @@ const Fun = (() => {
       : 'Para matar el rato mientras juegan los demás.';
   }
 
-  // Si se sale de la vista en mitad del juego de las ovejas, se para.
-  function leave() { if (sheep.running) endSheep(true); }
+  // Si se sale de la vista a mitad de un juego con reloj, se para.
+  function leave() {
+    if (sheep.running) endSheep(true);
+    if (build.running) endBuild(true);
+    if (simon.playing) {
+      simon.busy = false;
+      simon.playing = false;
+      renderSimon('Partida interrumpida. Pulsa empezar para otra.');
+    }
+  }
 
   // ---------- 🐑 Atrapa la oveja ----------
 
@@ -286,6 +307,247 @@ const Fun = (() => {
     const list = Object.entries(prod).sort((a, b) => b[1] - a[1]);
     $('#board-stats').innerHTML = `Producción: ${list.map(([k, v]) => `${T[k].icon} <b>${v}</b>`).join(' · ')}
       <br><span class="muted">El más abundante: ${T[list[0][0]].name} · el más escaso: ${T[list[list.length - 1][0]].name}</span>`;
+  }
+
+  // ---------- 🎲 Mayor o menor ----------
+
+  const FACES = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+  const roll2 = () => [1 + Math.floor(Math.random() * 6), 1 + Math.floor(Math.random() * 6)];
+  const hilo = { dice: roll2(), streak: 0 };
+
+  function initHilo() {
+    $('#hilo-up').addEventListener('click', () => guessHilo(1));
+    $('#hilo-down').addEventListener('click', () => guessHilo(-1));
+    renderHilo('Adivina: ¿la próxima tirada será mayor o menor?');
+  }
+
+  function renderHilo(msg, cls = '') {
+    const [a, b] = hilo.dice;
+    const sum = a + b;
+    $('#hilo-dice').innerHTML = `<span>${FACES[a - 1]}</span><span>${FACES[b - 1]}</span><b>${sum}</b>`;
+    // Probabilidad de acertar cada opción (lo que pagaría una apuesta justa).
+    let up = 0, down = 0;
+    for (let x = 1; x <= 6; x++) for (let y = 1; y <= 6; y++) { if (x + y > sum) up++; if (x + y < sum) down++; }
+    $('#hilo-up').querySelector('small').textContent = `${Math.round((up / 36) * 100)}%`;
+    $('#hilo-down').querySelector('small').textContent = `${Math.round((down / 36) * 100)}%`;
+    $('#hilo-msg').textContent = msg;
+    $('#hilo-msg').className = `game-result ${cls}`;
+    $('#hilo-score').innerHTML = `Racha <b>${hilo.streak}</b> · Récord <b>${best.hilo}</b>`;
+  }
+
+  function guessHilo(dir) {
+    const before = hilo.dice[0] + hilo.dice[1];
+    hilo.dice = roll2();
+    const now = hilo.dice[0] + hilo.dice[1];
+    const box = $('#hilo-dice');
+    box.classList.remove('rolling'); void box.offsetWidth; box.classList.add('rolling');
+    if (now === before) return renderHilo(`Igual (${now}): ni ganas ni pierdes.`);
+    if (Math.sign(now - before) === dir) {
+      hilo.streak++;
+      if (hilo.streak > best.hilo) { best.hilo = hilo.streak; saveBest(); }
+      renderHilo(`✔ ${now}. ¡Racha de ${hilo.streak}!`, 'ok');
+    } else {
+      const lost = hilo.streak;
+      hilo.streak = 0;
+      renderHilo(`✘ Salió ${now}. ${lost >= 3 ? `Se acabó una racha de ${lost}.` : 'Otra vez.'}`, 'bad');
+      navigator.vibrate?.(120);
+    }
+  }
+
+  // ---------- 🎵 Simón de recursos ----------
+
+  const SIMON = [['🌲', 'Madera', '#2f6b3a'], ['🧱', 'Ladrillo', '#c0643a'], ['🐑', 'Lana', '#8cc56b'], ['🌾', 'Trigo', '#e3c04a'], ['⛰️', 'Mineral', '#8a8f99']];
+  const simon = { seq: [], pos: 0, busy: false, playing: false };
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  function initSimon() {
+    $('#simon-pad').innerHTML = SIMON.map(([icon, name, color], i) =>
+      `<button type="button" class="simon-btn" data-i="${i}" style="--sc:${color}" aria-label="${name}">${icon}</button>`).join('');
+    $('#simon-pad').addEventListener('pointerdown', e => {
+      const b = e.target.closest('.simon-btn');
+      if (b) pressSimon(+b.dataset.i);
+    });
+    $('#simon-start').addEventListener('click', () => { simon.seq = []; simon.playing = true; nextSimon(); });
+    renderSimon('Pulsa empezar y repite la secuencia.');
+  }
+
+  function renderSimon(msg) {
+    $('#simon-msg').textContent = msg;
+    $('#simon-score').innerHTML = `Nivel <b>${simon.playing ? simon.seq.length : 0}</b> · Récord <b>${best.simon}</b>`;
+    $('#simon-start').hidden = simon.playing;
+  }
+
+  async function flash(i, ms = 380) {
+    const b = $(`#simon-pad [data-i="${i}"]`);
+    b.classList.add('lit');
+    await sleep(ms);
+    b.classList.remove('lit');
+  }
+
+  async function nextSimon() {
+    simon.seq.push(Math.floor(Math.random() * SIMON.length));
+    simon.pos = 0;
+    simon.busy = true;
+    renderSimon('Mira bien…');
+    await sleep(500);
+    const speed = Math.max(220, 420 - simon.seq.length * 12);
+    for (const i of simon.seq) {
+      if (!simon.busy) return; // se salió de la vista
+      await flash(i, speed);
+      await sleep(140);
+    }
+    simon.busy = false;
+    renderSimon('Tu turno: repítela.');
+  }
+
+  function pressSimon(i) {
+    if (!simon.playing || simon.busy) return;
+    flash(i, 160);
+    if (simon.seq[simon.pos] !== i) {
+      const level = simon.seq.length - 1;
+      simon.playing = false;
+      navigator.vibrate?.(150);
+      if (level > best.simon) { best.simon = level; saveBest(); }
+      return renderSimon(`✘ Era ${SIMON[simon.seq[simon.pos]][0]}. Llegaste al nivel ${level}.${level === best.simon && level ? ' 🏆 ¡Récord!' : ''}`);
+    }
+    simon.pos++;
+    if (simon.pos === simon.seq.length) {
+      if (simon.seq.length > best.simon) { best.simon = simon.seq.length; saveBest(); }
+      renderSimon('✔ ¡Bien! Siguiente…');
+      setTimeout(nextSimon, 600);
+    }
+  }
+
+  // ---------- ⚡ ¿Te llega? ----------
+
+  // Costes del juego base.
+  const RES = [['🌲', 'madera'], ['🧱', 'ladrillo'], ['🐑', 'lana'], ['🌾', 'trigo'], ['⛰️', 'mineral']];
+  const BUILDS = [
+    { name: 'Carretera', icon: '🛣️', cost: { madera: 1, ladrillo: 1 } },
+    { name: 'Poblado', icon: '🏠', cost: { madera: 1, ladrillo: 1, lana: 1, trigo: 1 } },
+    { name: 'Ciudad', icon: '🏰', cost: { trigo: 2, mineral: 3 } },
+    { name: 'Carta de desarrollo', icon: '🃏', cost: { lana: 1, trigo: 1, mineral: 1 } },
+  ];
+  const BUILD_SECS = 30;
+  const build = { running: false, score: 0, end: 0, timer: null, hand: null, target: null };
+
+  function initBuild() {
+    $('#build-start').addEventListener('click', startBuild);
+    $('#build-yes').addEventListener('click', () => answerBuild(true));
+    $('#build-no').addEventListener('click', () => answerBuild(false));
+    $('#build-costs').innerHTML = BUILDS.map(b =>
+      `<li>${b.icon} ${b.name}: ${Object.entries(b.cost).map(([r, n]) => RES.find(x => x[1] === r)[0].repeat(n)).join(' ')}</li>`).join('');
+    renderBuild();
+  }
+
+  function newHand() {
+    // Mano cerca del coste (para que haya duda): a veces llega justo, a veces falta uno.
+    build.target = randomItem(BUILDS);
+    const hand = Object.fromEntries(RES.map(([, r]) => [r, Math.floor(Math.random() * 2)]));
+    for (const [r, n] of Object.entries(build.target.cost)) hand[r] = Math.max(0, n + randomItem([-1, 0, 0, 1]));
+    build.hand = hand;
+  }
+
+  const fits = () => Object.entries(build.target.cost).every(([r, n]) => build.hand[r] >= n);
+
+  function renderBuild(msg = '') {
+    $('#build-play').hidden = !build.running;
+    $('#build-start').hidden = build.running;
+    $('#build-score').innerHTML = `Aciertos <b>${build.score}</b> · Récord <b>${best.build}</b>`;
+    $('#build-msg').textContent = msg;
+    if (!build.running || !build.hand) return;
+    $('#build-hand').innerHTML = RES.map(([icon, r]) =>
+      `<span class="res ${build.hand[r] ? '' : 'zero'}">${icon}<b>${build.hand[r]}</b></span>`).join('');
+    $('#build-target').textContent = `¿Te llega para ${build.target.icon} ${build.target.name}?`;
+  }
+
+  function startBuild() {
+    build.running = true;
+    build.score = 0;
+    build.end = Date.now() + BUILD_SECS * 1000;
+    newHand();
+    renderBuild();
+    clearInterval(build.timer);
+    build.timer = setInterval(() => {
+      const left = Math.max(0, build.end - Date.now());
+      $('#build-bar').style.width = `${(left / (BUILD_SECS * 1000)) * 100}%`;
+      if (!left) endBuild();
+    }, 100);
+  }
+
+  function answerBuild(yes) {
+    if (!build.running) return;
+    const ok = yes === fits();
+    if (ok) build.score++;
+    else { build.end -= 3000; navigator.vibrate?.(100); } // fallar quita 3 segundos
+    newHand();
+    renderBuild(ok ? '✔' : `✘ (−3 s)`);
+  }
+
+  function endBuild(silent = false) {
+    build.running = false;
+    clearInterval(build.timer);
+    $('#build-bar').style.width = '0%';
+    const record = !silent && build.score > best.build;
+    if (record) { best.build = build.score; saveBest(); }
+    $('#build-start').textContent = '↺ Otra vez';
+    renderBuild(silent ? '' : record ? `🏆 ¡Récord: ${build.score} aciertos!` : `${build.score} aciertos.`);
+  }
+
+  // ---------- 🎰 Tragaperras del puerto ----------
+
+  // 🏴‍☠️ es poco frecuente pero sale; ⭐ es el comodín raro.
+  const REEL = ['🌲', '🌲', '🧱', '🧱', '🐑', '🐑', '🌾', '🌾', '⛰️', '⛰️', '🏴‍☠️', '⭐'];
+  const slots = { coins: 20, spinning: false };
+
+  function initSlots() {
+    $('#slots-spin').addEventListener('click', spinSlots);
+    $('#slots-reset').addEventListener('click', () => { slots.coins = 20; renderSlots('Monedas repuestas. ¡Suerte!'); });
+    renderSlots('Cada tirada cuesta 1 moneda.');
+  }
+
+  function renderSlots(msg, cls = '') {
+    $('#slots-coins').innerHTML = `🪙 <b>${slots.coins}</b> · Récord <b>${best.coins}</b>`;
+    $('#slots-msg').textContent = msg;
+    $('#slots-msg').className = `game-result ${cls}`;
+    $('#slots-spin').disabled = slots.spinning || slots.coins <= 0;
+    $('#slots-reset').hidden = slots.coins > 0;
+  }
+
+  function prize(r) {
+    if (r.every(x => x === '🏴‍☠️')) return { n: -10, txt: '🏴‍☠️ ¡El ladrón te ha desplumado! −10' };
+    if (r.every(x => x === '⭐')) return { n: 50, txt: '⭐ ¡JACKPOT! +50' };
+    const wild = r.filter(x => x === '⭐').length;
+    const counts = {};
+    r.filter(x => x !== '⭐' && x !== '🏴‍☠️').forEach(x => { counts[x] = (counts[x] || 0) + 1; });
+    const top = Math.max(0, ...Object.values(counts)) + wild;
+    if (top >= 3) return { n: 12, txt: '¡Tres iguales! +12' };
+    if (new Set(r).size === 3 && !r.includes('🏴‍☠️') && !r.includes('⭐')) return { n: 2, txt: 'Tres distintos: mercado variado +2' };
+    if (top === 2) return { n: 3, txt: 'Pareja +3' };
+    return { n: 0, txt: 'Nada esta vez.' };
+  }
+
+  async function spinSlots() {
+    if (slots.spinning || slots.coins <= 0) return;
+    slots.spinning = true;
+    slots.coins--;
+    renderSlots('…');
+    const reels = [...document.querySelectorAll('#slots .reel')];
+    const result = reels.map(() => randomItem(REEL));
+    // Cada rodillo gira un poco más que el anterior.
+    await Promise.all(reels.map(async (el, i) => {
+      const end = Date.now() + 500 + i * 350;
+      el.classList.add('spin');
+      while (Date.now() < end) { el.textContent = randomItem(REEL); await sleep(70); }
+      el.textContent = result[i];
+      el.classList.remove('spin');
+    }));
+    const p = prize(result);
+    slots.coins = Math.max(0, slots.coins + p.n);
+    if (slots.coins > best.coins) { best.coins = slots.coins; saveBest(); }
+    slots.spinning = false;
+    if (p.n > 5) navigator.vibrate?.([60, 40, 60]);
+    renderSlots(slots.coins <= 0 ? `${p.txt} · Sin monedas: ¡el banco te rescata!` : p.txt, p.n > 0 ? 'ok' : p.n < 0 ? 'bad' : '');
   }
 
   // ---------- 🎯 Ruleta de la mesa ----------

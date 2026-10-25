@@ -89,12 +89,17 @@ const Rules = (() => {
     renderList();
   }
 
+  // Se borra al momento con «↩ Deshacer».
   function remove(id) {
-    const r = rules().find(x => x.id === id);
-    if (!confirm(`¿Borrar la regla «${r.title || 'sin título'}»?`)) return;
-    Storage.get().rules = rules().filter(x => x.id !== id);
+    const index = rules().findIndex(x => x.id === id);
+    const [r] = rules().splice(index, 1);
     Storage.save();
     renderList();
+    App.undo(`🗑️ Regla «${r.title || 'sin título'}» borrada`, () => {
+      rules().splice(index, 0, r);
+      Storage.save();
+      renderList();
+    });
   }
 
   return { init, render };

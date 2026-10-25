@@ -1,7 +1,7 @@
 // Arranque, navegación por pestañas, ajustes y utilidades comunes.
 const App = (() => {
   // Debe coincidir con CACHE en sw.js y data-build en index.html.
-  const VERSION = '1.6.1';
+  const VERSION = '1.7.0';
   const BANNER_KEY = 'catan-install-banner-closed';
   const $ = sel => document.querySelector(sel);
   let toastTimer;
@@ -57,6 +57,8 @@ const App = (() => {
     safe('Mientras esperas', () => Fun.init());
     safe('Wrapped', () => Wrapped.init());
     safe('Fotos', () => Photos.initViewer());
+    safe('Copias', () => Backup.init());
+    safe('Deshacer', initUndo);
     safe('Ajustes', initSettings);
     safe('Instalar', initInstall);
     safe('Pestaña inicial', openLastTab);
@@ -71,6 +73,42 @@ const App = (() => {
     });
     box.querySelector('.err-reload').addEventListener('click', () => location.reload());
     box.querySelector('.err-close').addEventListener('click', () => { box.hidden = true; });
+  }
+
+  // ---------- Deshacer ----------
+  // Al borrar algo se hace al momento y aparece «↩ Deshacer» unos segundos. Si no se pulsa,
+  // se ejecuta `onCommit` (p. ej. borrar la foto de verdad). Un borrado nuevo confirma el anterior.
+  let undoTimer = null;
+  let pendingCommit = null;
+
+  function undo(msg, onUndo, onCommit = null) {
+    flushUndo();
+    const bar = $('#undo-bar');
+    bar.querySelector('.undo-text').textContent = msg;
+    bar.hidden = false;
+    pendingCommit = onCommit;
+    bar.querySelector('.undo-btn').onclick = () => {
+      clearTimeout(undoTimer);
+      bar.hidden = true;
+      pendingCommit = null;
+      safe('Deshacer', onUndo);
+      toast('↩ Deshecho');
+    };
+    undoTimer = setTimeout(flushUndo, 7000);
+  }
+
+  function flushUndo() {
+    clearTimeout(undoTimer);
+    const bar = $('#undo-bar');
+    if (bar) bar.hidden = true;
+    const commit = pendingCommit;
+    pendingCommit = null;
+    if (commit) safe('Borrar', commit);
+  }
+
+  function initUndo() {
+    // Si se cierra o se oculta la app con un borrado pendiente, se confirma.
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushUndo(); });
   }
 
   // Vuelve a pintar todas las vistas tras un cambio de datos (cada una por separado).
@@ -221,20 +259,17 @@ const App = (() => {
       toast('Temporadas: ' + Stats.SEASON_MODES[seasonSel.value].toLowerCase());
     });
 
-    $('#export-btn').addEventListener('click', () => {
-      const blob = new Blob([JSON.stringify(Storage.get(), null, 2)], { type: 'application/json' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `catan-backup-${new Date().toISOString().slice(0, 10)}.json`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 1000); // en Safari/iOS revocarlo al instante cancela la descarga
-    });
+    // (El botón «Exportar» lo gestiona backup.js: compartir el archivo o descargarlo.)
 
     $('#import-file').addEventListener('change', async e => {
       const file = e.target.files[0];
       if (!file) return;
       try {
-        Storage.replace(JSON.parse(await file.text()));
+        const data = JSON.parse(await file.text());
+        await Backup.snapshot('Antes de importar');
+        Storage.replace(data);
+        Backup.renderSettings();
+        Backup.renderReminder();
         $('#season-mode').value = Storage.get().settings.seasonMode;
         Tracker.resetForm();
         refresh();
@@ -245,15 +280,17 @@ const App = (() => {
       e.target.value = '';
     });
 
-    $('#reset-games').addEventListener('click', () => {
-      if (confirm('¿Borrar TODAS las partidas? No se puede deshacer.')) {
+    $('#reset-games').addEventListener('click', async () => {
+      if (confirm('¿Borrar TODAS las partidas? (Se guarda antes una copia automática, restaurable desde aquí.)')) {
+        await Backup.snapshot('Antes de borrar el historial');
         Tracker.clearAll();
         toast('Historial borrado');
       }
     });
 
-    $('#reset-decks').addEventListener('click', () => {
-      if (confirm('¿Volver a las cartas originales de las 3 tablas? Se perderán las cartas añadidas o editadas.')) {
+    $('#reset-decks').addEventListener('click', async () => {
+      if (confirm('¿Volver a las cartas originales de las 3 tablas? (Se guarda antes una copia automática.)')) {
+        await Backup.snapshot('Antes de restaurar las tablas');
         Tables.reset();
         toast('Tablas restauradas');
       }
@@ -269,5 +306,5 @@ const App = (() => {
   }
 
   document.addEventListener('DOMContentLoaded', init);
-  return { toast, refresh, share, show };
+  return { toast, refresh, share, show, undo };
 })();

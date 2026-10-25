@@ -7,6 +7,22 @@ const Profile = (() => {
   let player = null;
   let evoSeason = 'all';
   let resizeTimer;
+  // Stats tiene dos modos: 'global' (liga, evolución, títulos, récords…) y 'player' (ficha).
+  const MODE_KEY = 'catan-app-stats-mode';
+  let statsMode = 'global';
+
+  function setMode(m) {
+    statsMode = m === 'player' ? 'player' : 'global';
+    try { localStorage.setItem(MODE_KEY, statsMode); } catch {}
+    const isPlayer = statsMode === 'player';
+    document.querySelectorAll('#view-stats .stats-global').forEach(el => { el.hidden = isPlayer; });
+    document.querySelectorAll('#view-stats .stats-player').forEach(el => { el.hidden = !isPlayer; });
+    $('#stats-title').textContent = isPlayer ? '👤 Ficha de jugador' : '📊 Estadísticas';
+    $('#stats-mode-btn').textContent = isPlayer ? '📊 General' : '👤 Ficha de jugador';
+    $('#stats-mode-btn').setAttribute('aria-pressed', isPlayer);
+    window.scrollTo(0, 0);
+    if (!isPlayer) renderEvolution(); // el gráfico necesita estar visible para medir el ancho
+  }
 
   const state = () => Storage.get();
   const defOf = id => Storage.TABLES.find(t => t.id === id);
@@ -25,12 +41,15 @@ const Profile = (() => {
       render();
     });
     $('#evo-season').addEventListener('change', e => { evoSeason = e.target.value; renderEvolution(); });
+    $('#stats-mode-btn').addEventListener('click', () => setMode(statsMode === 'player' ? 'global' : 'player'));
+    try { statsMode = localStorage.getItem(MODE_KEY) || 'global'; } catch {}
     // El SVG se dibuja al ancho real: repintar al girar el móvil o cambiar el tamaño.
     window.addEventListener('resize', () => {
       clearTimeout(resizeTimer);
       resizeTimer = setTimeout(() => { if ($('#view-stats').classList.contains('active')) renderEvolution(); }, 150);
     });
     render();
+    setMode(statsMode);
   }
 
   // ---------- Histórico de la liga (WhatsApp + app) ----------
@@ -108,8 +127,9 @@ const Profile = (() => {
         ? Stats.fmtDate(g.date, { day: 'numeric', month: 'short' })
         : `Partida ${toRoman(Stats.gameNumber(games, g))} · ${Stats.fmtDate(g.date, { day: 'numeric', month: 'short' })} · 🏆 ${g.winner}`;
     };
-    // Con la vista oculta no hay ancho: se dibuja de nuevo al abrir Stats (App.show → refresh).
-    if (!$('#view-stats').classList.contains('active')) return;
+    // Con la vista oculta no hay ancho: se dibuja de nuevo al abrir Stats (App.show → refresh)
+    // o al volver al modo general.
+    if (!$('#view-stats').classList.contains('active') || statsMode === 'player') return;
     Charts.lines(box, {
       series: players.map((p, i) => ({ name: p, color: color(i), values: points.map(pt => pt[p]) })),
       label,
