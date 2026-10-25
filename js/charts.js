@@ -1,5 +1,5 @@
-// Gráficos SVG sin dependencias. Los colores salen de variables CSS (--p1…--p4 por jugador,
-// --chart-*), así que cambian solos con el modo oscuro.
+// Gráfico SVG de líneas sin dependencias. Los colores salen de variables CSS (--p1…--p4 por
+// jugador), así que cambian solos con el modo oscuro.
 const Charts = (() => {
   const NS = 'http://www.w3.org/2000/svg';
   const { esc } = Stats;
@@ -113,56 +113,5 @@ const Charts = (() => {
     svg.addEventListener('click', e => { if (e.target !== hit) leave(); });
   }
 
-  /* Barras: tiradas de 2d6 frente a lo esperado. data: [{ sum, n, expected }]. */
-  function dice(box, data, ariaLabel) {
-    box.innerHTML = '';
-    const W = Math.max(280, box.clientWidth);
-    const H = 170;
-    const m = { top: 10, right: 6, bottom: 22, left: 26 };
-    const max = Math.max(1, ...data.map(d => Math.max(d.n, d.expected)));
-    const { ticks, top } = yTicks(max);
-    const band = (W - m.left - m.right) / data.length;
-    const bw = Math.min(28, band - 2); // 2px de separación como mínimo
-    const y = v => m.top + (1 - v / top) * (H - m.top - m.bottom);
-    const base = y(0);
-
-    const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: 'img', 'aria-label': ariaLabel, class: 'chart' }, box);
-    for (const t of ticks) {
-      el('line', { x1: m.left, x2: W - m.right, y1: y(t), y2: y(t), class: t ? 'grid' : 'axis' }, svg);
-      el('text', { x: m.left - 6, y: y(t) + 4, 'text-anchor': 'end', class: 'tick' }, svg).textContent = t;
-    }
-    const tip = tooltip(box);
-    const maxN = Math.max(...data.map(d => d.n));
-
-    data.forEach((d, i) => {
-      const cx = m.left + band * i + band / 2;
-      if (d.n > 0) {
-        // Barra con extremo superior redondeado (4px) y apoyada en la base.
-        const h = base - y(d.n);
-        const r = Math.min(4, h, bw / 2);
-        const x0 = cx - bw / 2;
-        el('path', {
-          d: `M${x0},${base} V${base - h + r} Q${x0},${base - h} ${x0 + r},${base - h} H${x0 + bw - r} Q${x0 + bw},${base - h} ${x0 + bw},${base - h + r} V${base} Z`,
-          class: d.n === maxN ? 'bar top' : 'bar',
-        }, svg);
-      }
-      // Marca de lo esperado por probabilidad.
-      if (d.expected > 0) el('line', { x1: cx - bw / 2 - 2, x2: cx + bw / 2 + 2, y1: y(d.expected), y2: y(d.expected), class: 'expected' }, svg);
-      el('text', { x: cx, y: H - 6, 'text-anchor': 'middle', class: d.sum === 7 ? 'tick strong' : 'tick' }, svg).textContent = d.sum;
-
-      const hit = el('rect', { x: cx - band / 2, y: 0, width: band, height: H, fill: 'transparent' }, svg);
-      const show = () => {
-        const r = svg.getBoundingClientRect();
-        tip.show(`<div class="tip-title">Suma ${d.sum}</div>
-          <div class="tip-row">Han salido<b>${d.n}</b></div>
-          <div class="tip-row">Esperado<b>${d.expected.toFixed(1).replace('.', ',')}</b></div>`,
-          (cx / W) * r.width, (y(Math.max(d.n, d.expected)) / H) * r.height);
-      };
-      hit.addEventListener('pointerenter', show);
-      hit.addEventListener('pointerdown', show);
-      hit.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') tip.hide(); });
-    });
-  }
-
-  return { lines, dice };
+  return { lines };
 })();

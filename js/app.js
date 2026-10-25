@@ -1,7 +1,7 @@
 // Arranque, navegación por pestañas, ajustes y utilidades comunes.
 const App = (() => {
   // Debe coincidir con CACHE en sw.js y data-build en index.html.
-  const VERSION = '1.3.0';
+  const VERSION = '1.6.0';
   const BANNER_KEY = 'catan-install-banner-closed';
   const $ = sel => document.querySelector(sel);
   let toastTimer;
@@ -31,6 +31,7 @@ const App = (() => {
     Profile.init();
     Rules.init();
     Fun.init();
+    Wrapped.init();
     Photos.initViewer();
     initTabs();
     initSettings();
@@ -146,6 +147,7 @@ const App = (() => {
 
   // Cambia de vista. Las de la barra superior (📜 Reglas, 🎮 Mientras esperas) no están en la inferior.
   function show(view) {
+    if (view !== 'fun') Fun.leave(); // para el juego de las ovejas si se sale a mitad
     document.querySelectorAll('[data-view]').forEach(b => {
       const on = b.dataset.view === view;
       b.classList.toggle('active', on);

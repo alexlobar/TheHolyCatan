@@ -1,7 +1,7 @@
 // Tracker: registro rápido de partidas, clasificación por temporada, campeones e historial.
 const Tracker = (() => {
   const $ = sel => document.querySelector(sel);
-  const { esc, toRoman, medal } = Stats;
+  const { esc, toRoman, medal, who } = Stats;
   let selected = new Set();
   let winner = null;
   let season = null; // temporada elegida en el selector (null = la actual)
@@ -13,6 +13,8 @@ const Tracker = (() => {
     $('#game-date').value = Stats.today();
     $('#game-form').addEventListener('submit', onSubmit);
     $('#season-select').addEventListener('change', e => { season = e.target.value; renderRanking(); });
+    $('#wrapped-open').addEventListener('click', () => Wrapped.open(season));
+    $('#league-share').addEventListener('click', () => App.share(Stats.leagueText(state(), season)));
     resetForm();
     render();
   }
@@ -29,17 +31,21 @@ const Tracker = (() => {
   function renderChips() {
     const players = state().players;
 
-    $('#participants').replaceChildren(...players.map(p => chip(p, selected.has(p), '', () => {
+    $('#participants').replaceChildren(...players.map(p => chip(who(p), selected.has(p), '', () => {
       selected.has(p) ? selected.delete(p) : selected.add(p);
       if (!selected.has(winner)) winner = null;
       renderChips();
     })));
 
     $('#winner').replaceChildren(...players.map(p => {
-      const c = chip(p, winner === p, 'winner', () => { winner = p; renderChips(); });
+      const c = chip(who(p), winner === p, 'winner', () => { winner = p; renderChips(); });
       c.disabled = !selected.has(p);
       return c;
     }));
+
+    // ⚠️ Regla de la liga: con menos de 3 fundadores la victoria no cuenta.
+    const founders = [...selected].filter(p => Storage.FOUNDERS.includes(p)).length;
+    $('#founders-warning').hidden = founders >= Storage.MIN_FOUNDERS;
 
     // Solo se ofrece guardar las habilidades si hay mesa sorteada en la Holy Table.
     $('#with-abilities-row').hidden = !Tables.snapshot().length;
@@ -70,17 +76,20 @@ const Tracker = (() => {
       note: $('#game-note').value.trim(),
       ...(abilities ? { abilities } : {}),
     });
-    App.toast(`🏆 Victoria para ${winner}`);
+    App.toast(Stats.isValid(state().games[0])
+      ? `🏆 Victoria para ${winner}`
+      : `Guardada, pero no cuenta para la liga (menos de ${Storage.MIN_FOUNDERS} fundadores)`);
     resetForm();
   }
 
   // Guarda una partida (también la usa el modo partida) y avisa de los logros nuevos.
+  // Logros, clasificación y estadísticas solo usan partidas válidas (mín. 3 fundadores).
   function addGame(game) {
     const s = state();
-    const before = [...s.games];
+    const before = Stats.valid(s.games);
     s.games.unshift(game);
     Storage.save();
-    const unlocked = Stats.newAchievements(before, s.games, s.players, mode());
+    const unlocked = Stats.newAchievements(before, Stats.valid(s.games), s.players, mode());
     unlocked.forEach((a, i) => setTimeout(() => App.toast(`${a.icon} Logro para ${a.player}: ${a.name}`), 2400 * (i + 1)));
     App.refresh();
     return unlocked;
@@ -89,7 +98,8 @@ const Tracker = (() => {
   // ---------- Clasificación y campeones ----------
 
   function renderRanking() {
-    const { games, players } = state();
+    const { players } = state();
+    const games = Stats.valid(state().games);
     const m = mode();
     const keys = Stats.seasons(games, m);
     const select = $('#season-select');
@@ -100,21 +110,35 @@ const Tracker = (() => {
       `<option value="${k}" ${k === season ? 'selected' : ''}>${Stats.seasonLabel(k)}${i === 0 && k !== 'all' ? ' (actual)' : ''}</option>`).join('');
 
     const shown = Stats.inSeason(games, season, m);
-    const rows = Stats.ranking(shown, players);
-    $('#stats-body').innerHTML = rows.map(r => `
-      <tr class="rank-${r.rank}">
-        <td><span class="medal">${shown.length ? medal(r.rank) : ''}</span>${esc(r.name)}</td>
-        <td>${r.played}</td>
+    const legacy = Stats.legacyTotal(season, m);
+    const rows = Stats.seasonRanking(games, players, season, m);
+    const any = shown.length > 0 || legacy > 0;
+    // Título principal de cada jugador (calculado con todo el histórico).
+    const byPlayer = Stats.titles(games, players, m).byPlayer;
+    $('#stats-body').innerHTML = rows.map(r => {
+      const t = byPlayer[r.name]?.[0];
+      return `
+      <tr class="rank-${r.rank} ${r.guest ? 'guest' : ''}">
+        <td><span class="medal">${any ? Stats.rowMedal(rows, r) : ''}</span>${esc(who(r.name))}${
+          r.guest ? '<small class="title-tag">invitado</small>' : t ? `<small class="title-tag">${t.icon} ${esc(t.name)}</small>` : ''}</td>
+        <td>${r.played || (legacy ? '—' : 0)}</td>
         <td class="roman">${toRoman(r.wins)}</td>
-        <td>${Math.round(r.pct * 100)}%</td>
-      </tr>`).join('');
-    $('#ranking-empty').hidden = shown.length > 0;
+        <td>${Stats.pctText(r)}</td>
+      </tr>`;
+    }).join('');
+    $('#ranking-empty').hidden = any;
+    $('#legacy-note').hidden = !legacy;
+    $('#legacy-note').innerHTML = `📜 <b>${legacy + shown.length}</b> partidas: ${legacy} de la liga de WhatsApp${
+      shown.length ? ` + ${shown.length} de la app` : ''}. PJ y % solo cuentan las partidas registradas en la app; el histórico completo está en 📊 Stats.`;
+    $('#wrapped-open').hidden = !any;
+    $('#wrapped-open').textContent = `🎁 Wrapped · ${Stats.seasonLabel(season)}`;
+    $('#league-share').hidden = !any;
 
     const champs = Stats.champions(games, players, m);
     $('#champions-card').hidden = !champs.length;
     $('#champions').innerHTML = champs.map(c => `
       <li><span class="season">${esc(c.label)}</span>
-        <span class="champ">🏆 ${c.winners.map(esc).join(' · ')}</span>
+        <span class="champ">🏆 ${c.winners.map(n => esc(who(n))).join(' · ')}</span>
         <span class="roman small">${toRoman(c.wins)}</span></li>`).join('');
   }
 
@@ -132,7 +156,7 @@ const Tracker = (() => {
       const others = g.players.filter(p => p !== g.winner);
       const meta = [g.duration && `⏱ ${Stats.fmtDuration(g.duration)}`, g.rounds && `🔁 ${g.rounds} rondas`].filter(Boolean);
       return `
-      <li class="game">
+      <li class="game ${Stats.isValid(g) ? '' : 'invalid'}">
         <div class="date-badge">
           <span class="day">${d ? d.getDate() : '?'}</span>
           <span class="month">${d ? d.toLocaleDateString('es-ES', { month: 'short' }).replace('.', '') : ''}</span>
@@ -140,8 +164,9 @@ const Tracker = (() => {
         </div>
         <div class="info">
           <div class="game-num">Partida ${toRoman(games.length - i)}</div>
-          <div class="win">🏆 ${esc(g.winner)}</div>
-          <div class="players">${others.map(p => `<span class="tag">${esc(p)}</span>`).join('')}</div>
+          <div class="win">🏆 ${esc(who(g.winner))}</div>
+          <div class="players">${others.map(p => `<span class="tag">${esc(who(p))}</span>`).join('')}</div>
+          ${Stats.isValid(g) ? '' : `<div class="invalid-tag">⚠️ No cuenta para la liga (menos de ${Storage.MIN_FOUNDERS} fundadores)</div>`}
           ${meta.length ? `<div class="game-meta">${meta.join(' · ')}</div>` : ''}
           ${g.abilities?.length ? `<div class="mini-abilities">${g.abilities.map(a =>
             `<span class="mini" style="--slot:var(--c-${a.color})">${esc(a.name)}</span>`).join('')}</div>` : ''}

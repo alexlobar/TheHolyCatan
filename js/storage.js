@@ -3,6 +3,18 @@ const Storage = (() => {
   const KEY = 'catan-app-v1';
 
   const PLAYERS = ['Kristy', 'Emi', 'Serbest', 'Bylexx'];
+  // Los fundadores de la liga: una victoria solo vale si juegan al menos 3 (regla de WhatsApp).
+  const FOUNDERS = ['Kristy', 'Emi', 'Serbest', 'Bylexx'];
+  const MIN_FOUNDERS = 3;
+  const EMOJI = { Serbest: '👙', Kristy: '🏍️', Bylexx: '🐈', Emi: '💃🏼' };
+
+  // ✨ LIGA DE CATANES ✨ — victorias por año copiadas del grupo de WhatsApp (no hay partidas
+  // detalladas: solo el total). Fuachi solo aparece aquí, en el palmarés de cada año.
+  const LEGACY = {
+    2024: { Serbest: 9, Kristy: 7, Bylexx: 6, Fuachi: 4, Emi: 6 },
+    2025: { Serbest: 12, Kristy: 13, Bylexx: 11, Fuachi: 2, Emi: 10 },
+    2026: { Serbest: 13, Kristy: 7, Bylexx: 18, Fuachi: 1, Emi: 10 },
+  };
 
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
@@ -75,7 +87,9 @@ const Storage = (() => {
   const defaultDeck = def => ({ cards: def.cards.map(c => newCard(def, ...c)) });
   const defaultDecks = () => Object.fromEntries(TABLES.map(t => [t.id, defaultDeck(t)]));
   const defaultDraw = () => ({ tables: TABLES.map(t => t.id), slots: [] });
-  const defaultSettings = () => ({ seasonMode: 'quarter' }); // quarter | year | none
+  const defaultSettings = () => ({ seasonMode: 'year' }); // year | quarter | none (la liga es anual)
+
+  const FOUNDERS_RULE = ['⚠️ Victorias válidas', `Para que la victoria sea válida debe haber un **mínimo de ${MIN_FOUNDERS} fundadores** (${FOUNDERS.join(', ')}). Si no, la partida queda en el historial pero **no cuenta para la liga**.`];
 
   // Reglas de la casa de ejemplo (editables en 📜 Reglas). En los textos: *cursiva* y **negrita**.
   const defaultRules = () => [
@@ -84,14 +98,16 @@ const Storage = (() => {
     ['El Destierro', 'No juegas 2 rondas: sin cobrar, te afectan los 7 y no puedes cambiar. *Te libras antes si sacas doble 1 o doble 6.*'],
     ['La Absolución', 'Todos (excepto quien la juega) quedan libres de las penalizaciones activas; quien la juega recibe al ladrón.'],
     ['Discusiones', 'Si no hay acuerdo, decide el dado: **par** gana quien reclama, **impar** el otro. Sin recurso.'],
-    ['Turnos eternos', 'Si alguien tarda demasiado, cualquiera puede pulsar **🗯️ Meter prisa** en 🎮 Mientras esperas.'],
+    ['Turnos eternos', 'Si alguien tarda demasiado, el resto puede empezar a contar **en voz alta hasta 30**. Al llegar, se pasa el turno.'],
+    FOUNDERS_RULE,
   ].map(([title, text]) => ({ id: uid(), title, text }));
 
   const defaults = () => ({
-    version: 6,
+    version: 7,
     players: [...PLAYERS],
+    legacy: structuredClone(LEGACY), // { [año]: { jugador: victorias } } de la liga de WhatsApp
     // { id, date, players, winner, note, abilities?: [{ color, deck, name }], duration?: segundos,
-    //   rounds?, rolls?: [sumas de dados], photo?: true (la foto vive en IndexedDB, ver photos.js) }
+    //   rounds?, photo?: true (la foto vive en IndexedDB, ver photos.js) }
     games: [],
     rules: defaultRules(), // [{ id, title, text }]
     decks: {},   // { [tablaId]: { cards: [{ id, name, desc, enabled, rounds, cost?, benefit? }] } }
@@ -106,14 +122,21 @@ const Storage = (() => {
   // Rellena lo que falte y migra datos antiguos:
   //  v1: `holy` = 5 usos fijos · v2: `cards` + `table` = un único mazo
   //  v3: `decks` por tabla, cada uno con su mesa · v4: una sola mesa de 5 colores (`draw`)
-  //  v5: `rounds` en las cartas, `settings` (temporadas) y `current` (partida en curso).
+  //  v5: `rounds` en las cartas, `settings` (temporadas) y `current` (partida en curso)
+  //  v6: `rules` · v7: `legacy` (liga de WhatsApp), temporadas anuales y regla de fundadores.
   function normalize(data) {
     const s = { ...defaults(), ...data };
+    const prev = data.version || 0;
     if (!Array.isArray(s.games)) s.games = [];
     s.settings = { ...defaultSettings(), ...(data.settings || {}) };
     if (s.current && (!Array.isArray(s.current.players) || !s.current.timer)) s.current = null;
-    if (s.current && !Array.isArray(s.current.rolls)) s.current.rolls = [];
     if (!Array.isArray(s.rules)) s.rules = defaultRules();
+    if (!s.legacy || typeof s.legacy !== 'object') s.legacy = structuredClone(LEGACY);
+    // Una sola vez al pasar a v7: la liga es anual y entra la regla de los fundadores.
+    if (prev && prev < 7) {
+      s.settings.seasonMode = 'year';
+      if (!s.rules.some(r => r.title === FOUNDERS_RULE[0])) s.rules.unshift({ id: uid(), title: FOUNDERS_RULE[0], text: FOUNDERS_RULE[1] });
+    }
     const decks = data.decks && typeof data.decks === 'object' ? { ...data.decks } : {};
 
     const old = Array.isArray(data.cards) ? data.cards : Array.isArray(data.holy) ? data.holy : null;
@@ -142,7 +165,7 @@ const Storage = (() => {
 
     s.decks = decks;
     delete s.holy; delete s.cards; delete s.table;
-    s.version = 6;
+    s.version = 7;
     return s;
   }
 
@@ -178,6 +201,9 @@ const Storage = (() => {
     COLORS,
     defaultDraw,
     defaultRules,
+    FOUNDERS,
+    MIN_FOUNDERS,
+    EMOJI,
     uid,
     load,
     save,

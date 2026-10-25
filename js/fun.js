@@ -1,17 +1,15 @@
 // 🎮 Mientras esperas: cosas que hacer en el turno de los demás.
-//  · Oráculo del dado: apuesta la próxima suma y apunta las tiradas (histograma de la partida).
-//  · Meter prisa: pulla a pantalla completa con cuenta atrás (se cuenta quién la recibe).
-//  · Trivial de Catán: preguntas del juego base + generadas con vuestras cartas.
+//  · Atrapa la oveja: reflejos, 30 s.
+//  · Parejas de recursos: memory de 12 cartas.
+//  · Generador de tableros: tablero aleatorio (6 y 8 nunca juntos) para la próxima partida.
 //  · Ruleta de la mesa: elige a alguien al azar.
 const Fun = (() => {
   const $ = sel => document.querySelector(sel);
-  const { esc, DICE_WAYS } = Stats;
+  const { esc } = Stats;
   const KEY = 'catan-app-fun'; // récords de este dispositivo
-  const SUMS = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
   const state = () => Storage.get();
-  const cur = () => state().current;
-  const players = () => cur()?.players || state().players;
+  const players = () => state().current?.players || state().players;
   const randomItem = arr => arr[Math.floor(Math.random() * arr.length)];
   const shuffle = arr => {
     const a = [...arr];
@@ -22,280 +20,272 @@ const Fun = (() => {
     return a;
   };
 
-  let best = { oracle: 0, trivia: 0 };
+  let best = { sheep: 0, memory: 0 }; // memory: menos movimientos = mejor (0 = sin récord)
   function loadBest() { try { best = { ...best, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; } catch {} }
   function saveBest() { try { localStorage.setItem(KEY, JSON.stringify(best)); } catch {} }
 
   function init() {
     loadBest();
-    initOracle();
-    initRush();
-    initTrivia();
+    initSheep();
+    initMemory();
+    initBoard();
     initWheel();
     render();
   }
 
   function render() {
-    renderOracle();
-    renderRushTargets();
     renderWheelPlayers();
-    $('#fun-context').textContent = cur()
-      ? `Partida en curso · ${cur().players.join(', ')}`
-      : 'Sin partida en curso: las tiradas del Oráculo solo se guardan mientras tengas la app abierta.';
+    $('#fun-context').textContent = state().current
+      ? `Partida en curso · ${state().current.players.join(', ')}`
+      : 'Para matar el rato mientras juegan los demás.';
   }
 
-  // ---------- 🔮 Oráculo del dado ----------
+  // Si se sale de la vista en mitad del juego de las ovejas, se para.
+  function leave() { if (sheep.running) endSheep(true); }
 
-  const points = s => Math.round(36 / DICE_WAYS(s)); // 7 → 6 pts · 2/12 → 36 pts
-  let pick = null;
-  let score = 0;
-  let streak = 0;
-  let sessionRolls = []; // tiradas sin partida en curso
+  // ---------- 🐑 Atrapa la oveja ----------
 
-  const rolls = () => cur()?.rolls || sessionRolls;
+  const SHEEP_SECS = 30;
+  const sheep = { running: false, score: 0, end: 0, timers: [], cells: [] };
 
-  function initOracle() {
-    $('#oracle-pick').innerHTML = SUMS.map(s =>
-      `<button type="button" class="num" data-s="${s}"><b>${s}</b><small>${points(s)} pts</small></button>`).join('');
-    $('#oracle-roll').innerHTML = SUMS.map(s => `<button type="button" class="num" data-s="${s}"><b>${s}</b></button>`).join('');
-    $('#oracle-pick').addEventListener('click', e => {
-      const b = e.target.closest('[data-s]');
-      if (!b) return;
-      pick = pick === +b.dataset.s ? null : +b.dataset.s;
-      renderOracle();
+  function initSheep() {
+    $('#sheep-field').innerHTML = Array.from({ length: 9 }, (_, k) =>
+      `<button type="button" class="hole" data-k="${k}" aria-label="Casilla ${k + 1}"></button>`).join('');
+    sheep.cells = [...document.querySelectorAll('#sheep-field .hole')];
+    $('#sheep-field').addEventListener('pointerdown', e => {
+      const b = e.target.closest('.hole');
+      if (b && sheep.running) hit(b);
     });
-    $('#oracle-roll').addEventListener('click', e => {
-      const b = e.target.closest('[data-s]');
-      if (b) roll(+b.dataset.s);
-    });
-    $('#oracle-undo').addEventListener('click', () => {
-      if (!rolls().length) return;
-      rolls().pop();
-      Storage.save();
-      renderOracle();
-      App.toast('↩ Última tirada borrada');
-    });
+    $('#sheep-start').addEventListener('click', startSheep);
+    renderSheepScore();
   }
 
-  function roll(sum) {
-    if (!Game.addRoll(sum)) sessionRolls.push(sum);
-    let msg;
-    if (pick !== null) {
-      if (pick === sum) {
-        const p = points(sum);
-        score += p;
-        streak++;
-        if (score > best.oracle) { best.oracle = score; saveBest(); }
-        msg = `🔮 ¡Acertaste el ${sum}! +${p} pts${streak > 1 ? ` · racha ${streak}` : ''}`;
-        navigator.vibrate?.([40, 60, 40]);
-      } else {
-        streak = 0;
-        msg = `Salió ${sum}, no ${pick}. ${randomItem(['El oráculo necesita gafas.', 'Las ovejas lo sabían.', 'Otra vez será, vidente.', 'Ni el desierto falla tanto.'])}`;
-      }
-      pick = null;
+  function startSheep() {
+    sheep.running = true;
+    sheep.score = 0;
+    sheep.end = Date.now() + SHEEP_SECS * 1000;
+    sheep.cells.forEach(c => { c.className = 'hole'; c.textContent = ''; });
+    $('#sheep-start').hidden = true;
+    $('#sheep-result').textContent = '';
+    renderSheepScore();
+    spawn();
+    sheep.timers.push(setInterval(() => {
+      const left = Math.max(0, sheep.end - Date.now());
+      $('#sheep-bar').style.width = `${(left / (SHEEP_SECS * 1000)) * 100}%`;
+      $('#sheep-time').textContent = `${Math.ceil(left / 1000)} s`;
+      if (!left) endSheep();
+    }, 100));
+  }
+
+  function spawn() {
+    if (!sheep.running) return;
+    const progress = 1 - (sheep.end - Date.now()) / (SHEEP_SECS * 1000); // 0 → 1
+    const free = sheep.cells.filter(c => !c.dataset.item);
+    if (free.length) {
+      const cell = randomItem(free);
+      const roll = Math.random();
+      const item = roll < 0.12 ? 'gold' : roll < 0.37 ? 'robber' : 'sheep';
+      cell.dataset.item = item;
+      cell.className = `hole up ${item}`;
+      cell.textContent = item === 'robber' ? '🏴‍☠️' : '🐑';
+      const life = 1150 - progress * 500;
+      setTimeout(() => { if (cell.dataset.item === item) clear(cell); }, life);
+    }
+    sheep.timers.push(setTimeout(spawn, 750 - progress * 330));
+  }
+
+  function clear(cell) {
+    delete cell.dataset.item;
+    cell.className = 'hole';
+    cell.textContent = '';
+  }
+
+  function hit(cell) {
+    const item = cell.dataset.item;
+    if (!item) return;
+    const pts = item === 'gold' ? 3 : item === 'robber' ? -2 : 1;
+    sheep.score = Math.max(0, sheep.score + pts);
+    cell.className = `hole hit ${pts > 0 ? 'good' : 'bad'}`;
+    cell.textContent = pts > 0 ? `+${pts}` : `${pts}`;
+    delete cell.dataset.item;
+    if (pts < 0) navigator.vibrate?.(120);
+    setTimeout(() => { if (!cell.dataset.item) clear(cell); }, 300);
+    renderSheepScore();
+  }
+
+  function endSheep(silent = false) {
+    sheep.running = false;
+    sheep.timers.forEach(t => { clearInterval(t); clearTimeout(t); });
+    sheep.timers = [];
+    sheep.cells.forEach(clear);
+    $('#sheep-start').hidden = false;
+    $('#sheep-start').textContent = '↺ Otra vez';
+    $('#sheep-bar').style.width = '0%';
+    $('#sheep-time').textContent = '';
+    if (silent) return;
+    const record = sheep.score > best.sheep;
+    if (record) { best.sheep = sheep.score; saveBest(); }
+    $('#sheep-result').textContent = record
+      ? `🏆 ¡Nuevo récord: ${sheep.score} ovejas!`
+      : `${sheep.score} ${sheep.score === 1 ? 'oveja' : 'ovejas'}. ${randomItem(['El ladrón se ríe de ti.', 'Las ovejas siguen sueltas.', 'Pastor en prácticas.', 'Algo es algo.'])}`;
+    renderSheepScore();
+  }
+
+  function renderSheepScore() {
+    $('#sheep-score').innerHTML = `Ovejas <b>${sheep.score}</b> · Récord <b>${best.sheep}</b>`;
+  }
+
+  // ---------- 🃏 Parejas de recursos ----------
+
+  const RESOURCES = [['🌲', 'Madera'], ['🧱', 'Ladrillo'], ['🐑', 'Lana'], ['🌾', 'Trigo'], ['⛰️', 'Mineral'], ['🏴‍☠️', 'Ladrón']];
+  const mem = { deck: [], open: [], done: new Set(), moves: 0, start: 0, lock: false };
+
+  function initMemory() {
+    $('#memory-grid').addEventListener('click', e => {
+      const b = e.target.closest('.mcard');
+      if (b) flip(+b.dataset.k);
+    });
+    $('#memory-new').addEventListener('click', newMemory);
+    newMemory();
+  }
+
+  function newMemory() {
+    mem.deck = shuffle([...RESOURCES, ...RESOURCES]);
+    mem.open = [];
+    mem.done = new Set();
+    mem.moves = 0;
+    mem.start = 0;
+    mem.lock = false;
+    $('#memory-grid').innerHTML = mem.deck.map(([icon, name], k) => `
+      <button type="button" class="mcard" data-k="${k}" aria-label="Carta ${k + 1}">
+        <span class="back">⬡</span><span class="front">${icon}<small>${name}</small></span>
+      </button>`).join('');
+    $('#memory-result').textContent = '';
+    renderMemoryScore();
+  }
+
+  function flip(k) {
+    if (mem.lock || mem.done.has(k) || mem.open.includes(k)) return;
+    if (!mem.start) mem.start = Date.now();
+    const cards = document.querySelectorAll('#memory-grid .mcard');
+    cards[k].classList.add('open');
+    mem.open.push(k);
+    if (mem.open.length < 2) return;
+
+    mem.moves++;
+    const [a, b] = mem.open;
+    if (mem.deck[a][0] === mem.deck[b][0]) {
+      mem.done.add(a); mem.done.add(b);
+      cards[a].classList.add('matched'); cards[b].classList.add('matched');
+      mem.open = [];
+      if (mem.done.size === mem.deck.length) finishMemory();
     } else {
-      msg = `🎲 Apuntado: ${sum}`;
+      mem.lock = true;
+      setTimeout(() => {
+        cards[a].classList.remove('open'); cards[b].classList.remove('open');
+        mem.open = [];
+        mem.lock = false;
+      }, 750);
     }
-    if (sum === 7) msg += ' · 🏴‍☠️ ¡Ladrón! Más de 7 cartas: a descartar la mitad';
-    App.toast(msg);
-    renderOracle();
-    Game.render();
+    renderMemoryScore();
   }
 
-  function renderOracle() {
-    document.querySelectorAll('#oracle-pick .num').forEach(b => b.classList.toggle('on', +b.dataset.s === pick));
-    $('#oracle-status').innerHTML = pick === null
-      ? '1️⃣ Apuesta qué suma saldrá en la próxima tirada <span class="muted">(opcional)</span>'
-      : `Apuesta: <b>${pick}</b> · vale ${points(pick)} pts. 2️⃣ Ahora toca lo que salga:`;
-    $('#oracle-score').innerHTML = `Puntos <b>${score}</b> · Racha <b>${streak}</b> · Récord <b>${best.oracle}</b>`;
-
-    const r = rolls();
-    $('#oracle-undo').hidden = !r.length;
-    $('#dice-empty').hidden = r.length > 0;
-    $('#dice-chart').hidden = !r.length;
-    $('#dice-caption').hidden = !r.length;
-    $('#dice-key').hidden = !r.length;
-    if (!r.length) return;
-    const data = Stats.diceStats(r);
-    const top = [...data].sort((a, b) => b.n - a.n)[0];
-    const sevens = data.find(d => d.sum === 7);
-    $('#dice-caption').innerHTML = `${r.length} tiradas · la que más sale: <b>${top.sum}</b> (${top.n}) · sietes: <b>${sevens.n}</b> de ${sevens.expected.toFixed(1).replace('.', ',')} esperados`;
-    if ($('#view-fun').classList.contains('active')) Charts.dice($('#dice-chart'), data, `Histograma de ${r.length} tiradas de dos dados`);
+  function finishMemory() {
+    const secs = Math.round((Date.now() - mem.start) / 1000);
+    const record = !best.memory || mem.moves < best.memory;
+    if (record) { best.memory = mem.moves; saveBest(); }
+    $('#memory-result').textContent = `${record ? '🏆 ¡Récord! ' : '✔ '}${mem.moves} movimientos en ${secs} s`;
+    renderMemoryScore();
   }
 
-  // ---------- 🗯️ Meter prisa ----------
+  function renderMemoryScore() {
+    $('#memory-score').innerHTML = `Movimientos <b>${mem.moves}</b> · Récord <b>${best.memory || '—'}</b>`;
+  }
 
-  const RUSH = [
-    '{n}, ese ladrillo no se va a colocar solo.',
-    '{n}, ¿estás construyendo una ciudad o una catedral?',
-    'Las ovejas de {n} se están haciendo viejas.',
-    'Tic, tac… a {n} se le pudre el trigo.',
-    'Hasta el ladrón se ha dormido esperando a {n}.',
-    'El desierto tiene más movimiento que el turno de {n}.',
-    '{n}, el banco cierra a las ocho.',
-    '{n}, ¿vas a usar esa carretera o solo la contemplas?',
-    'Ese 7 no va a salir por mirarlo, {n}.',
-    'Los caballeros de {n} se han jubilado esperando.',
-    'Más lento que una partida con La Ruina: {n}.',
-    'Hasta El Destierro dura menos que el turno de {n}.',
-    '{n}, elige: madera, ladrillo o la jubilación.',
-    'El puerto 3:1 ha cambiado de dueño mientras {n} pensaba.',
-    'Las ovejas están votando un nuevo jugador. {n}, vas perdiendo.',
-    '{n}, Klaus Teuber diseñó el juego entero en menos tiempo.',
-    'Robin Hood le ha robado el turno a {n} de puro aburrimiento.',
-    '{n}, la Holy Table está rezando por que acabes.',
+  // ---------- 🗺️ Generador de tableros ----------
+
+  // Tablero base: 19 hexágonos (radio 2 en coordenadas axiales).
+  const TERRAINS = [
+    ...Array(4).fill('forest'), ...Array(4).fill('pasture'), ...Array(4).fill('field'),
+    ...Array(3).fill('hill'), ...Array(3).fill('mountain'), 'desert',
   ];
-  let rushTarget = null;
-  let rushTimer = null;
-
-  function initRush() {
-    $('#rush-btn').addEventListener('click', rush);
-    $('#rush-targets').addEventListener('click', e => {
-      const b = e.target.closest('[data-p]');
-      if (!b) return;
-      rushTarget = rushTarget === b.dataset.p ? null : b.dataset.p;
-      renderRushTargets();
-    });
-    $('#rush-overlay').addEventListener('click', closeRush);
+  const T = {
+    forest: { icon: '🌲', name: 'Madera', fill: '#2f6b3a' },
+    pasture: { icon: '🐑', name: 'Lana', fill: '#8cc56b' },
+    field: { icon: '🌾', name: 'Trigo', fill: '#e3c04a' },
+    hill: { icon: '🧱', name: 'Ladrillo', fill: '#c0643a' },
+    mountain: { icon: '⛰️', name: 'Mineral', fill: '#8a8f99' },
+    desert: { icon: '🏜️', name: 'Desierto', fill: '#e6d3a3' },
+  };
+  const NUMBERS = [2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12];
+  const PIPS = n => 6 - Math.abs(7 - n);
+  const CELLS = [];
+  for (let q = -2; q <= 2; q++) {
+    for (let r = Math.max(-2, -q - 2); r <= Math.min(2, -q + 2); r++) CELLS.push({ q, r });
   }
+  const DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
+  const adjacent = (a, b) => DIRS.some(([dq, dr]) => a.q + dq === b.q && a.r + dr === b.r);
 
-  function renderRushTargets() {
-    if (rushTarget && !players().includes(rushTarget)) rushTarget = null;
-    $('#rush-targets').innerHTML = players().map(p =>
-      `<button type="button" class="chip small ${rushTarget === p ? 'on' : ''}" data-p="${esc(p)}">${esc(p)}</button>`).join('');
-  }
-
-  function rush() {
-    const name = rushTarget || randomItem(players());
-    const c = cur();
-    if (c) {
-      c.rush ??= {};
-      c.rush[name] = (c.rush[name] || 0) + 1;
-      Storage.save();
+  function generateBoard() {
+    for (let attempt = 0; attempt < 2000; attempt++) {
+      const terr = shuffle(TERRAINS);
+      const nums = shuffle(NUMBERS);
+      let k = 0;
+      const tiles = CELLS.map((c, i) => ({ ...c, terrain: terr[i], number: terr[i] === 'desert' ? null : nums[k++] }));
+      const hot = tiles.filter(t => t.number === 6 || t.number === 8);
+      // Regla clásica: 6 y 8 nunca juntos (ni dos números iguales pegados).
+      const bad = hot.some((a, i) => hot.slice(i + 1).some(b => adjacent(a, b)))
+        || tiles.some((a, i) => a.number && tiles.slice(i + 1).some(b => b.number === a.number && adjacent(a, b)));
+      if (!bad) return tiles;
     }
-    const ov = $('#rush-overlay');
-    ov.querySelector('.rush-text').textContent = randomItem(RUSH).replaceAll('{n}', name);
-    ov.hidden = false;
-    navigator.vibrate?.(200);
-    let left = 30;
-    const count = ov.querySelector('.rush-count');
-    count.textContent = left;
-    count.classList.remove('done');
-    clearInterval(rushTimer);
-    rushTimer = setInterval(() => {
-      left--;
-      if (left > 0) { count.textContent = left; return; }
-      clearInterval(rushTimer);
-      count.textContent = '⏰ ¡Tiempo!';
-      count.classList.add('done');
-      navigator.vibrate?.([300, 100, 300]);
-    }, 1000);
+    return null;
   }
 
-  function closeRush() {
-    clearInterval(rushTimer);
-    $('#rush-overlay').hidden = true;
+  function initBoard() {
+    $('#board-new').addEventListener('click', drawBoard);
+    drawBoard();
   }
 
-  // ---------- 🧠 Trivial de Catán ----------
+  function drawBoard() {
+    const tiles = generateBoard();
+    if (!tiles) return;
+    const size = 40;
+    const hx = (q, r) => size * Math.sqrt(3) * (q + r / 2);
+    const hy = r => size * 1.5 * r;
+    const corners = (cx, cy) => Array.from({ length: 6 }, (_, k) => {
+      const a = (Math.PI / 180) * (60 * k - 30);
+      return `${(cx + (size - 1.5) * Math.cos(a)).toFixed(1)},${(cy + (size - 1.5) * Math.sin(a)).toFixed(1)}`;
+    }).join(' ');
+    const w = size * Math.sqrt(3) * 5 + 8;
+    const h = size * 8 + 8;
 
-  // [pregunta, respuesta correcta, ...incorrectas] — reglas del juego base.
-  const TRIVIA = [
-    ['¿Cuántos puntos de victoria hacen falta para ganar?', '10', '8', '12', '15'],
-    ['¿Cuánto cuesta una ciudad?', '2 trigo + 3 mineral', '3 trigo + 2 mineral', '2 ladrillo + 3 mineral', '1 de cada recurso'],
-    ['¿Cuánto cuesta un poblado?', 'Ladrillo, madera, lana y trigo', 'Ladrillo, madera y mineral', '2 madera y 2 ladrillo', 'Lana, trigo y mineral'],
-    ['¿Cuánto cuesta una carta de desarrollo?', 'Lana, trigo y mineral', 'Madera, ladrillo y lana', '2 trigo y 1 mineral', 'Mineral, madera y lana'],
-    ['¿Cuánto cuesta una carretera?', 'Madera y ladrillo', 'Madera y lana', '2 ladrillos', 'Ladrillo y mineral'],
-    ['¿Cuántos puntos da la Gran Ruta Comercial (carretera más larga)?', '2', '1', '3', '4'],
-    ['¿Cuántos tramos seguidos hacen falta, como mínimo, para la carretera más larga?', '5', '4', '6', '7'],
-    ['¿Cuántos caballeros jugados hacen falta, como mínimo, para el Gran Ejército?', '3', '2', '4', '5'],
-    ['Cuando sale un 7, ¿quién descarta la mitad de sus cartas?', 'Quien tenga más de 7', 'Quien tenga 7 o más', 'Quien tenga más de 5', 'Todos'],
-    ['¿Cuántas cartas de desarrollo hay en el juego base?', '25', '20', '30', '24'],
-    ['¿Cuántas cartas de caballero hay en el juego base?', '14', '10', '12', '16'],
-    ['¿Cuántas cartas de punto de victoria hay?', '5', '3', '4', '6'],
-    ['Sin puerto, ¿a cuánto cambias con la banca?', '4:1', '3:1', '5:1', '2:1'],
-    ['¿A cuánto cambia un puerto genérico?', '3:1', '2:1', '4:1', '5:2'],
-    ['¿Cuál es la suma más probable con dos dados?', '7', '6', '8', '12'],
-    ['¿Qué número no tiene ficha en el tablero?', '7', '2', '12', '6'],
-    ['¿Cuántas fichas numéricas hay en el tablero base?', '18', '19', '16', '20'],
-    ['¿Cuántos hexágonos de terreno tiene el tablero base?', '19', '18', '20', '24'],
-    ['¿Cuántos poblados tiene cada jugador?', '5', '4', '6', '3'],
-    ['¿Cuántas ciudades tiene cada jugador?', '4', '3', '5', '6'],
-    ['¿Cuántas carreteras tiene cada jugador?', '15', '12', '14', '20'],
-    ['¿Qué recurso dan las colinas?', 'Ladrillo', 'Mineral', 'Lana', 'Madera'],
-    ['¿Qué recurso dan las montañas?', 'Mineral', 'Ladrillo', 'Trigo', 'Lana'],
-    ['¿Qué recurso dan los pastos?', 'Lana', 'Trigo', 'Madera', 'Mineral'],
-    ['¿Quién creó Catán?', 'Klaus Teuber', 'Reiner Knizia', 'Uwe Rosenberg', 'Alan R. Moon'],
-    ['¿En qué año se publicó Catán?', '1995', '1989', '2001', '1998'],
-    ['¿Cuántos puntos da una ciudad?', '2', '1', '3', '4'],
-    ['¿Cuántas cartas de cada recurso hay en el juego base?', '19', '20', '18', '15'],
-    ['¿Qué hace la carta de Monopolio?', 'Todos te dan todas sus cartas de un recurso', 'Robas 2 cartas a un jugador', 'Coges 2 recursos del banco', 'Construyes 2 carreteras gratis'],
-  ];
+    const hexes = tiles.map(t => {
+      const cx = hx(t.q, t.r), cy = hy(t.r);
+      const info = T[t.terrain];
+      const hot = t.number === 6 || t.number === 8;
+      const pips = t.number ? Array.from({ length: PIPS(t.number) }, (_, k) =>
+        `<circle cx="${cx + (k - (PIPS(t.number) - 1) / 2) * 4.5}" cy="${cy + 21}" r="1.6" class="pip ${hot ? 'hot' : ''}"/>`).join('') : '';
+      return `
+        <g>
+          <polygon points="${corners(cx, cy)}" fill="${info.fill}" class="tile"/>
+          <text x="${cx}" y="${cy - 17}" text-anchor="middle" class="tile-icon">${info.icon}</text>
+          ${t.number ? `
+            <circle cx="${cx}" cy="${cy + 6}" r="14" class="token"/>
+            <text x="${cx}" y="${cy + 11}" text-anchor="middle" class="token-n ${hot ? 'hot' : ''}">${t.number}</text>
+            ${pips}` : `<text x="${cx}" y="${cy + 12}" text-anchor="middle" class="robber">🏴‍☠️</text>`}
+        </g>`;
+    }).join('');
+    $('#board').innerHTML = `
+      <svg viewBox="${-w / 2} ${-h / 2} ${w} ${h}" role="img" aria-label="Tablero de Catán generado al azar" class="board-svg">
+        ${hexes}
+      </svg>`;
 
-  // Preguntas generadas con vuestras cartas: «¿Qué carta dice…?»
-  function houseQuestions() {
-    const cards = Storage.TABLES.flatMap(t => state().decks[t.id].cards
-      .filter(c => c.name.trim() && c.desc.trim())
-      .map(c => ({ ...c, table: t })));
-    if (cards.length < 4) return [];
-    return cards.map(c => {
-      const wrong = shuffle(cards.filter(x => x.name !== c.name)).slice(0, 3).map(x => x.name);
-      const desc = c.desc.replace(/\*+/g, '');
-      return [`${c.table.icon} ¿Qué carta de la casa dice: «${desc.length > 110 ? desc.slice(0, 110) + '…' : desc}»?`, c.name, ...wrong];
-    });
-  }
-
-  let tScore = 0;
-  let tQuestion = null;
-  let tAnswered = false;
-
-  function initTrivia() {
-    $('#trivia-next').addEventListener('click', nextQuestion);
-    $('#trivia-options').addEventListener('click', e => {
-      const b = e.target.closest('[data-a]');
-      if (b) answer(b.dataset.a);
-    });
-    nextQuestion();
-  }
-
-  function nextQuestion() {
-    const bank = [...TRIVIA, ...houseQuestions()];
-    let q;
-    do { q = randomItem(bank); } while (bank.length > 1 && q === tQuestion);
-    tQuestion = q;
-    tAnswered = false;
-    const [text, right, ...wrong] = q;
-    $('#trivia-q').textContent = text;
-    $('#trivia-options').innerHTML = shuffle([right, ...wrong]).map(a =>
-      `<button type="button" class="btn option" data-a="${esc(a)}">${esc(a)}</button>`).join('');
-    $('#trivia-feedback').textContent = '';
-    $('#trivia-next').hidden = true;
-    renderTriviaScore();
-  }
-
-  function answer(a) {
-    if (tAnswered) return;
-    tAnswered = true;
-    const right = tQuestion[1];
-    document.querySelectorAll('#trivia-options .option').forEach(b => {
-      b.disabled = true;
-      if (b.dataset.a === right) b.classList.add('right');
-      else if (b.dataset.a === a) b.classList.add('wrong');
-    });
-    if (a === right) {
-      tScore++;
-      if (tScore > best.trivia) { best.trivia = tScore; saveBest(); }
-      $('#trivia-feedback').textContent = randomItem(['✔ ¡Correcto!', '✔ Sabio de Catán.', '✔ Klaus estaría orgulloso.']);
-    } else {
-      $('#trivia-feedback').textContent = `✘ Era «${right}». La racha vuelve a 0.`;
-      tScore = 0;
-    }
-    $('#trivia-next').hidden = false;
-    renderTriviaScore();
-  }
-
-  function renderTriviaScore() {
-    $('#trivia-score').innerHTML = `Racha <b>${tScore}</b> · Récord <b>${best.trivia}</b>`;
+    // Producción esperada por recurso (suma de puntitos de probabilidad).
+    const prod = {};
+    for (const t of tiles) if (t.number) prod[t.terrain] = (prod[t.terrain] || 0) + PIPS(t.number);
+    const list = Object.entries(prod).sort((a, b) => b[1] - a[1]);
+    $('#board-stats').innerHTML = `Producción: ${list.map(([k, v]) => `${T[k].icon} <b>${v}</b>`).join(' · ')}
+      <br><span class="muted">El más abundante: ${T[list[0][0]].name} · el más escaso: ${T[list[list.length - 1][0]].name}</span>`;
   }
 
   // ---------- 🎯 Ruleta de la mesa ----------
@@ -338,5 +328,5 @@ const Fun = (() => {
     tickFn();
   }
 
-  return { init, render };
+  return { init, render, leave };
 })();

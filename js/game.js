@@ -87,7 +87,9 @@ const Game = (() => {
     const players = state().players;
     setupPlayers ??= new Set(players);
     $('#setup-players').innerHTML = players.map(p =>
-      `<button type="button" class="chip ${setupPlayers.has(p) ? 'on' : ''}" data-p="${esc(p)}">${esc(p)}</button>`).join('');
+      `<button type="button" class="chip ${setupPlayers.has(p) ? 'on' : ''}" data-p="${esc(p)}">${esc(Stats.who(p))}</button>`).join('');
+    const founders = [...setupPlayers].filter(p => Storage.FOUNDERS.includes(p)).length;
+    $('#setup-warning').hidden = founders >= Storage.MIN_FOUNDERS;
     $('#setup-players').querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => {
       const p = b.dataset.p;
       setupPlayers.has(p) ? setupPlayers.delete(p) : setupPlayers.add(p);
@@ -113,7 +115,6 @@ const Game = (() => {
       round: 1,
       timer: { acc: 0, since: Date.now() },
       effects: [],
-      rolls: [], // sumas de dados apuntadas en 🎮 Mientras esperas → Oráculo
     };
     finishWinner = null;
     Storage.save();
@@ -209,12 +210,7 @@ const Game = (() => {
     $('#game-timer').classList.toggle('paused', !running);
     $('#game-pause').textContent = running ? '⏸ Pausar' : '▶ Seguir';
     $('#game-round').textContent = c.round;
-    $('#live-players').textContent = c.players.join(' · ');
-    const rolls = c.rolls || [];
-    const top = rolls.length ? Stats.diceStats(rolls).sort((a, b) => b.n - a.n)[0] : null;
-    $('#live-dice').textContent = rolls.length
-      ? `🎲 ${rolls.length} tiradas apuntadas · la que más sale: ${top.sum} (${top.n})`
-      : '🎲 Apunta las tiradas en el Oráculo para ver qué números salen';
+    $('#live-players').textContent = c.players.map(Stats.who).join(' · ');
 
     $('#live-abilities').innerHTML = c.abilities.length ? c.abilities.map(a => {
       const def = defOf(a.deck);
@@ -248,7 +244,7 @@ const Game = (() => {
     // Ganador: solo entre los que juegan.
     if (!c.players.includes(finishWinner)) finishWinner = null;
     $('#finish-winner').innerHTML = c.players.map(p =>
-      `<button type="button" class="chip winner ${finishWinner === p ? 'on' : ''}" data-p="${esc(p)}">${esc(p)}</button>`).join('');
+      `<button type="button" class="chip winner ${finishWinner === p ? 'on' : ''}" data-p="${esc(p)}">${esc(Stats.who(p))}</button>`).join('');
     $('#finish-winner').querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => { finishWinner = b.dataset.p; renderLive(); }));
   }
 
@@ -266,8 +262,6 @@ const Game = (() => {
       abilities: c.abilities.map(a => ({ color: a.color, deck: a.deck, name: a.name })),
       duration: Math.round(elapsed(c) / 1000),
       rounds: c.round,
-      ...(c.rolls?.length ? { rolls: c.rolls } : {}),
-      ...(c.rush ? { rush: c.rush } : {}), // { jugador: veces que le metieron prisa }
     };
     state().current = null;
     $('#finish-note').value = '';
@@ -294,7 +288,8 @@ const Game = (() => {
     const s = state();
     const g = s.games.find(x => x.id === summary.gameId);
     if (!g) { summary = null; return render(); }
-    $('#summary-title').textContent = `🏆 ${g.winner} gana la Partida ${toRoman(Stats.gameNumber(s.games, g))}`;
+    $('#summary-title').textContent = `🏆 ${Stats.who(g.winner)} gana la Partida ${toRoman(Stats.gameNumber(s.games, g))}`;
+    $('#summary-invalid').hidden = Stats.isValid(g);
     $('#summary-meta').textContent = [Stats.fmtDuration(g.duration), g.rounds && `${g.rounds} rondas`, g.players.join(', ')].filter(Boolean).join(' · ');
     $('#summary-achievements').innerHTML = summary.unlocked.map(a =>
       `<li><span class="ach-icon">${a.icon}</span> <b>${esc(a.player)}</b> desbloquea «${esc(a.name)}»</li>`).join('');
@@ -325,14 +320,5 @@ const Game = (() => {
     }
   }
 
-  // Apunta una tirada en la partida en curso (la usa el Oráculo). Devuelve false si no hay partida.
-  function addRoll(sum) {
-    const c = cur();
-    if (!c) return false;
-    (c.rolls ||= []).push(sum);
-    Storage.save();
-    return true;
-  }
-
-  return { init, render, addRoll };
+  return { init, render };
 })();

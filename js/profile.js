@@ -33,10 +33,50 @@ const Profile = (() => {
     render();
   }
 
+  // ---------- Histórico de la liga (WhatsApp + app) ----------
+
+  function renderHistory() {
+    const { players } = state();
+    const h = Stats.history(Stats.valid(state().games), players);
+    const avg = h.years.length ? Math.round(h.totalGames / h.years.length) : 0;
+
+    $('#hist-kpis').innerHTML = [
+      ['Partidas totales', `<span class="big-num">${h.totalGames}</span>`],
+      ['Años de liga', h.years.length],
+      ['Media por año', avg],
+      ['Año récord', h.busiest ? `${h.busiest.year} · ${h.busiest.games}` : '—'],
+    ].map(([k, v]) => `<div class="kpi"><span class="kpi-label">${k}</span><span class="kpi-value">${v}</span></div>`).join('');
+
+    // Partidas por año: barra proporcional + desglose WhatsApp / app.
+    const max = Math.max(1, ...h.byYear.map(y => y.games));
+    $('#hist-years').innerHTML = [...h.byYear].reverse().map(y => `
+      <li>
+        <span class="hy-year">${y.year}</span>
+        <span class="hy-bar"><i style="width:${(y.games / max) * 100}%"></i></span>
+        <b class="hy-n">${y.games}</b>
+        <span class="hy-detail">${[y.legacyGames && `${y.legacyGames} WhatsApp`, y.appGames && `${y.appGames} app`].filter(Boolean).join(' + ')}${
+          y.champions.length ? ` · 🏆 ${y.champions.map(c => esc(Stats.who(c))).join(', ')}${y.year === String(new Date().getFullYear()) ? ' (en curso)' : ''}` : ''}</span>
+      </li>`).join('');
+
+    // Victorias por jugador y año (el campeón de cada año, resaltado).
+    $('#hist-table').innerHTML = `
+      <thead><tr><th>Jugador</th>${h.years.map(y => `<th>'${y.slice(2)}</th>`).join('')}<th>Total</th><th>%</th></tr></thead>
+      <tbody>${h.totals.map(t => `
+        <tr class="${t.guest ? 'guest' : ''}">
+          <td>${esc(Stats.who(t.name))}</td>
+          ${h.byYear.map(y => `<td class="roman small ${y.champions.includes(t.name) ? 'champ-cell' : ''}">${toRoman(y.wins[t.name])}</td>`).join('')}
+          <td class="roman">${toRoman(t.wins)}</td>
+          <td>${Math.round(t.share * 100)}%</td>
+        </tr>`).join('')}
+      </tbody>
+      <tfoot><tr><td>Partidas</td>${h.byYear.map(y => `<td>${y.games}</td>`).join('')}<td><b>${h.totalGames}</b></td><td></td></tr></tfoot>`;
+  }
+
   // ---------- Evolución (gráfico de líneas) ----------
 
   function renderEvolution() {
-    const { players, games, settings } = state();
+    const { players, settings } = state();
+    const games = Stats.valid(state().games); // solo partidas que cuentan para la liga
     const mode = settings.seasonMode;
     const keys = Stats.seasons(games, mode);
     if (evoSeason !== 'all' && !keys.includes(evoSeason)) evoSeason = 'all';
@@ -45,21 +85,25 @@ const Profile = (() => {
     $('#evo-season').hidden = mode === 'none';
 
     const shown = Stats.inSeason(games, evoSeason, mode);
+    const baselines = Stats.legacyBaselines(evoSeason, mode); // años de WhatsApp: un salto por año
+    const has = shown.length > 0 || baselines.length > 0;
     const box = $('#evo-chart');
-    $('#evo-empty').hidden = shown.length > 0;
-    box.hidden = !shown.length;
-    $('#evo-table-wrap').hidden = !shown.length;
-    if (!shown.length) return;
+    $('#evo-empty').hidden = has;
+    box.hidden = !has;
+    $('#evo-table-wrap').hidden = !has;
+    $('#evo-note').hidden = !baselines.length;
+    if (!has) return;
 
     // Color fijo por jugador (orden de la lista de jugadores), nunca por su puesto.
     const color = i => `var(--p${i + 1})`;
     $('#evo-legend').innerHTML = players.map((p, i) =>
-      `<span class="legend-item"><span class="sw" style="background:${color(i)}"></span>${esc(p)}</span>`).join('');
+      `<span class="legend-item"><span class="sw" style="background:${color(i)}"></span>${esc(Stats.who(p))}</span>`).join('');
 
-    const points = Stats.evolution(shown, players);
+    const points = Stats.evolution(shown, players, baselines);
     const label = (i, short) => {
-      const g = points[i].game;
-      if (!g) return 'Inicio';
+      const pt = points[i];
+      const g = pt.game;
+      if (!g) return short && pt.short ? pt.short : pt.label;
       return short
         ? Stats.fmtDate(g.date, { day: 'numeric', month: 'short' })
         : `Partida ${toRoman(Stats.gameNumber(games, g))} · ${Stats.fmtDate(g.date, { day: 'numeric', month: 'short' })} · 🏆 ${g.winner}`;
@@ -75,17 +119,19 @@ const Profile = (() => {
     // Vista de tabla (accesible y para quien prefiera números).
     const last = points[points.length - 1];
     $('#evo-table').innerHTML = `
-      <thead><tr><th>Jugador</th><th>Victorias</th><th>Partidas</th></tr></thead>
-      <tbody>${players.map(p => `<tr><td>${esc(p)}</td><td>${last[p]}</td><td>${shown.filter(g => g.players.includes(p)).length}</td></tr>`).join('')}</tbody>`;
+      <thead><tr><th>Jugador</th><th>Victorias</th></tr></thead>
+      <tbody>${players.map(p => `<tr><td>${esc(Stats.who(p))}</td><td>${last[p]}</td></tr>`).join('')}</tbody>`;
   }
 
   function render() {
-    const { players, games, settings } = state();
+    const { players, settings } = state();
+    const games = Stats.valid(state().games); // solo partidas que cuentan para la liga
     if (!players.includes(player)) player = players[0];
+    renderHistory();
     renderEvolution();
 
     $('#profile-players').innerHTML = players.map(p =>
-      `<button type="button" class="chip ${p === player ? 'on' : ''}" data-p="${esc(p)}">${esc(p)}</button>`).join('');
+      `<button type="button" class="chip ${p === player ? 'on' : ''}" data-p="${esc(p)}">${esc(Stats.who(p))}</button>`).join('');
 
     const pr = Stats.profile(games, players, player);
     const titles = Stats.champions(games, players, settings.seasonMode).filter(c => c.winners.includes(player));
@@ -93,24 +139,39 @@ const Profile = (() => {
       ? `${pr.streak.n} ${pr.streak.won ? (pr.streak.n === 1 ? 'victoria' : 'victorias') : (pr.streak.n === 1 ? 'derrota' : 'derrotas')}`
       : '—';
 
+    // Con el histórico (WhatsApp + app): victorias, cuota sobre todas las partidas y mejor año.
+    const hist = Stats.history(games, players);
+    const me = hist.totals.find(t => t.name === player);
     $('#profile-kpis').innerHTML = [
-      ['Partidas', pr.played],
-      ['Victorias', `<span class="roman">${toRoman(pr.wins)}</span>`],
-      ['% victorias', `${pr.pct}%`],
+      ['Victorias', `<span class="roman">${toRoman(me?.wins || 0)}</span>`],
+      ['% de partidas', `${Math.round((me?.share || 0) * 100)}%`],
+      ['Mejor año', me?.bestYear ? `${me.bestYear.year} · <span class="roman">${toRoman(me.bestYear.wins)}</span>` : '—'],
       ['Racha actual', `${pr.streak ? (pr.streak.won ? '🔥 ' : '🧊 ') : ''}${streak}`],
-      ['Mejor racha', pr.bestStreak ? `${pr.bestStreak} seguidas` : '—'],
+      ['Mejor racha', pr.bestStreak > 1 ? `${pr.bestStreak} seguidas` : pr.bestStreak ? '1 victoria' : '—'],
       ['Títulos', titles.length ? `🏆 ${titles.length}` : '—'],
     ].map(([k, v]) => `<div class="kpi"><span class="kpi-label">${k}</span><span class="kpi-value">${v}</span></div>`).join('');
 
+    const tt = Stats.titles(games, players, settings.seasonMode);
+    const mine = tt.byPlayer[player] || [];
+    $('#profile-titles').innerHTML = mine.length
+      ? mine.map(t => `<span class="title-chip" title="${esc(t.desc)}">${t.icon} ${esc(t.name)}</span>`).join('')
+      : '<span class="muted">Sin títulos… de momento.</span>';
+
     const month = m => m ? `${fmtMonth(m.key)} · ${m.wins} de ${m.played} (${Stats.pct(m.wins, m.played)}%)` : '—';
-    const rushed = games.reduce((n, g) => n + (g.rush?.[player] || 0), 0);
-    const rushTop = Math.max(0, ...players.map(p => games.reduce((n, g) => n + (g.rush?.[p] || 0), 0)));
+    // Victorias por año (WhatsApp + app) y lo registrado solo en la app.
+    const perYear = [...hist.byYear].reverse()
+      .filter(y => y.wins[player])
+      .map(y => `${y.year}: ${toRoman(y.wins[player])}`);
     $('#profile-months').innerHTML = `
+      ${perYear.length ? `<li><span>📜 Victorias por año</span><b>${perYear.join(' · ')}</b></li>` : ''}
+      <li><span>🎲 En la app</span><b>${pr.played ? `${pr.played} partidas · ${toRoman(pr.wins)} victorias (${pr.pct}%)` : 'sin partidas aún'}</b></li>`;
+    $('#profile-months').innerHTML += `
+      <li><span>😈 Su némesis</span><b>${pr.nemesis ? `${esc(pr.nemesis.rival)} · le ha ganado ${pr.nemesis.theirs} ${pr.nemesis.theirs === 1 ? 'vez' : 'veces'}` : '—'}</b></li>
+      <li><span>🎯 Su víctima favorita</span><b>${pr.victim ? `${esc(pr.victim.rival)} · le ha ganado ${pr.victim.mine} ${pr.victim.mine === 1 ? 'vez' : 'veces'}` : '—'}</b></li>
       <li><span>📈 Mejor mes</span><b>${month(pr.bestMonth)}</b></li>
       <li><span>📉 Peor mes</span><b>${month(pr.worstMonth)}</b></li>
       ${pr.avgWin ? `<li><span>⏱ Duración media de sus victorias</span><b>${Stats.fmtDuration(pr.avgWin)}</b></li>` : ''}
-      ${titles.length ? `<li><span>🏆 Campeón en</span><b>${titles.map(t => esc(t.label)).join(', ')}</b></li>` : ''}
-      ${rushed ? `<li><span>🗯️ Le han metido prisa</span><b>${rushed} ${rushed === 1 ? 'vez' : 'veces'}${rushed === rushTop ? ' · 🐌 el más lento' : ''}</b></li>` : ''}`;
+      ${titles.length ? `<li><span>🏆 Campeón en</span><b>${titles.map(t => esc(t.label)).join(', ')}</b></li>` : ''}`;
 
     // Cara a cara: victorias de cada uno en las partidas que han jugado juntos.
     $('#profile-h2h').innerHTML = pr.h2h.map(h => {
@@ -140,6 +201,26 @@ const Profile = (() => {
         <span class="ach-name">${esc(a.name)}</span>
         <span class="ach-desc">${esc(a.desc)}</span>
       </li>`).join('');
+
+    // Salón de títulos (todos los títulos y quién los tiene ahora mismo).
+    $('#titles-list').innerHTML = tt.list.map(t => `
+      <li class="${t.holders.length ? '' : 'vacant'}">
+        <span class="t-icon">${t.icon}</span>
+        <div class="t-info">
+          <div class="t-name">${esc(t.name)}</div>
+          <div class="t-desc">${esc(t.desc)}</div>
+        </div>
+        <div class="t-holder">${t.holders.length ? `<b>${t.holders.map(esc).join(' · ')}</b><small>${esc(t.value)}</small>` : '<small>vacante</small>'}</div>
+      </li>`).join('');
+
+    // Récords del grupo.
+    const recs = Stats.records(games, players, settings.seasonMode);
+    $('#records').innerHTML = recs.length ? recs.map(r => `
+      <li>
+        <span class="r-icon">${r.icon}</span>
+        <div class="r-info"><div class="r-title">${esc(r.title)}</div><div class="r-detail">${esc(r.detail)}</div></div>
+        <b class="r-value">${esc(r.value)}</b>
+      </li>`).join('') : '<li class="empty">Aún no hay récords. ¡A jugar!</li>';
 
     // Habilidades ganadoras (todas las partidas con habilidades guardadas).
     const ab = Stats.abilityStats(games);

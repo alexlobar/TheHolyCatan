@@ -2,7 +2,7 @@
 // Estrategia "red primero": con internet siempre se sirve la última versión publicada
 // (y se actualiza la copia); sin internet se usa la copia guardada.
 // Debe coincidir con VERSION en js/app.js y data-build en index.html: cambiarlo renueva la copia guardada.
-const CACHE = 'catan-v1.3.0';
+const CACHE = 'catan-v1.6.0';
 const ASSETS = [
   './',
   './index.html',
@@ -19,6 +19,7 @@ const ASSETS = [
   './js/profile.js',
   './js/rules.js',
   './js/fun.js',
+  './js/wrapped.js',
   './js/app.js',
   './icons/apple-touch-icon.png',
   './icons/icon-192.png',
