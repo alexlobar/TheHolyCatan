@@ -219,6 +219,11 @@ const Stats = (() => {
     const timed = wins.filter(g => g.duration);
     const avgWin = timed.length ? Math.round(timed.reduce((s, g) => s + g.duration, 0) / timed.length) : 0;
 
+    // Puntos de victoria (solo partidas jugadas con el marcador).
+    const scored = mine.filter(g => g.points && g.points[p] != null);
+    const avgPoints = scored.length ? scored.reduce((s, g) => s + g.points[p], 0) / scored.length : null;
+    const oneAway = scored.filter(g => g.winner !== p && g.points[p] === POINTS_GOAL - 1).length;
+
     // Habilidades que más veces estaban en juego cuando ganó.
     const lucky = {};
     for (const g of wins) {
@@ -241,6 +246,9 @@ const Stats = (() => {
       nemesis,
       victim,
       avgWin,
+      avgPoints,
+      oneAway,
+      scored: scored.length,
       lucky: Object.values(lucky).sort((a, b) => b.n - a.n).slice(0, 3),
     };
   }
@@ -394,6 +402,25 @@ const Stats = (() => {
     return { best, worst };
   }
 
+  // ---------- Puntos de victoria ----------
+
+  const POINTS_GOAL = 10;
+
+  // Diferencia entre el ganador y el mejor de los demás (null si la partida no tiene puntos).
+  function margin(g) {
+    if (!g.points || g.points[g.winner] == null) return null;
+    const others = g.players.filter(p => p !== g.winner && g.points[p] != null).map(p => g.points[p]);
+    return others.length ? g.points[g.winner] - Math.max(...others) : null;
+  }
+
+  // «Kristy🏍️ 10 · Emi💃🏼 8 · …», de más a menos puntos.
+  function pointsLine(g) {
+    if (!g.points) return '';
+    return g.players.filter(p => g.points[p] != null)
+      .sort((a, b) => g.points[b] - g.points[a])
+      .map(p => `${who(p)} ${g.points[p]}`).join(' · ');
+  }
+
   // ---------- Récords del grupo ----------
 
   function records(games, players, mode) {
@@ -406,10 +433,14 @@ const Stats = (() => {
       out.push({ icon: '🐢', title: 'Partida más larga', value: fmtDuration(long.duration), detail: `Partida ${num(long)} · ganó ${long.winner}` });
       if (timed.length > 1) out.push({ icon: '⚡', title: 'Partida más corta', value: fmtDuration(short.duration), detail: `Partida ${num(short)} · ganó ${short.winner}` });
     }
-    const withRounds = games.filter(g => g.rounds);
-    if (withRounds.length) {
-      const most = withRounds.reduce((a, b) => (b.rounds > a.rounds ? b : a));
-      out.push({ icon: '🔁', title: 'Más rondas', value: `${most.rounds} rondas`, detail: `Partida ${num(most)} · ganó ${most.winner}` });
+
+    const scored = games.filter(g => margin(g) != null);
+    if (scored.length) {
+      const tight = scored.reduce((a, b) => (margin(b) < margin(a) ? b : a));
+      const crush = scored.reduce((a, b) => (margin(b) > margin(a) ? b : a));
+      const by = n => `por ${n} punto${n === 1 ? '' : 's'}`;
+      out.push({ icon: '😰', title: 'Partida más ajustada', value: by(margin(tight)), detail: `Partida ${num(tight)} · ${pointsLine(tight)}` });
+      if (scored.length > 1 && crush !== tight) out.push({ icon: '💥', title: 'Mayor paliza', value: by(margin(crush)), detail: `Partida ${num(crush)} · ${pointsLine(crush)}` });
     }
 
     const st = players.map(p => ({ p, ...streaks(games, p) }));
@@ -652,6 +683,7 @@ const Stats = (() => {
     if (!isValid(game)) lines.push(`⚠️ Menos de ${Storage.MIN_FOUNDERS} fundadores: no cuenta para la liga`);
     const extra = [game.duration && `⏱ ${fmtDuration(game.duration)}`, game.rounds && `🔁 ${game.rounds} rondas`].filter(Boolean);
     if (extra.length) lines.push(extra.join(' · '));
+    if (game.points) lines.push(`🏅 ${pointsLine(game)}`);
     if (game.abilities?.length) {
       const emoji = Object.fromEntries(Storage.COLORS.map(c => [c.id, c.emoji]));
       lines.push('', '🎴 Habilidades:', ...game.abilities.map(a => `${emoji[a.color] || '▪️'} ${a.name}`));
@@ -667,6 +699,7 @@ const Stats = (() => {
     esc, rich, toRoman, MEDALS, medal, rowMedal, today, fmtDate, fmtMonth, fmtDuration, pct, pctText, joinNames, chrono, gameNumber,
     SEASON_MODES, seasonKey, seasonLabel, currentSeason, inSeason, seasons,
     isValid, valid, foundersIn, legacyOf, legacyTotal, who,
+    POINTS_GOAL, margin, pointsLine,
     ranking, seasonRanking, champions, profile, evolution, history, predict, legacyBaselines, streaks, records, TITLES, titles, wrapped, wrappedText,
     abilityStats, ACHIEVEMENTS, achievements, newAchievements, leagueText, shareText,
   };

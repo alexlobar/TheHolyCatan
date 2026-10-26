@@ -1,7 +1,7 @@
 // Arranque, navegación por pestañas, ajustes y utilidades comunes.
 const App = (() => {
   // Debe coincidir con CACHE en sw.js y data-build en index.html.
-  const VERSION = '1.7.0';
+  const VERSION = '1.9.0';
   const BANNER_KEY = 'catan-install-banner-closed';
   const $ = sel => document.querySelector(sel);
   let toastTimer;
@@ -56,6 +56,7 @@ const App = (() => {
     safe('Reglas', () => Rules.init());
     safe('Mientras esperas', () => Fun.init());
     safe('Wrapped', () => Wrapped.init());
+    safe('Modo mesa', () => Mesa.init());
     safe('Fotos', () => Photos.initViewer());
     safe('Copias', () => Backup.init());
     safe('Deshacer', initUndo);
@@ -232,7 +233,7 @@ const App = (() => {
     document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === `view-${view}`));
     try { localStorage.setItem('catan-app-tab', view); } catch {}
     window.scrollTo(0, 0);
-    if (view !== 'fun') safe('Mientras esperas', () => Fun.leave()); // para el juego de las ovejas
+    if (view !== 'fun') safe('Mientras esperas', () => Fun.leave()); // para los juegos con reloj (Loly, ¿Te llega?, Simón)
     refresh(); // por si otra pestaña cambió datos (p. ej. una mesa nueva en la Holy Table)
   }
 

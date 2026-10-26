@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es" data-build="1.7.0">
+<html lang="es" data-build="1.9.0">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -16,11 +16,11 @@
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="icon" href="icons/favicon-32.png" type="image/png" sizes="32x32">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" sizes="180x180">
-  <link rel="stylesheet" href="css/styles.css?v=1.7.0">
+  <link rel="stylesheet" href="css/styles.css?v=1.9.0">
 </head>
 <body>
   <header class="topbar">
-    <h1>⬡ Catán Tracker</h1>
+    <h1><img src="icons/logo.svg" class="brand-logo" alt=""> Catán Tracker</h1>
     <div class="topbar-actions">
       <button type="button" class="top-btn" data-view="fun" aria-pressed="false" aria-label="Mientras esperas: minijuegos">🎮</button>
       <button type="button" class="top-btn" data-view="rules" aria-pressed="false" aria-label="Reglas de la casa">📜</button>
@@ -58,7 +58,7 @@
           </div>
         </fieldset>
         <button type="button" id="game-start" class="btn primary big">▶ Empezar partida</button>
-        <p class="muted small-note">Cronómetro, rondas y penalizaciones. Al terminar, la partida se guarda sola con sus habilidades y su duración.</p>
+        <p class="muted small-note">Con cronómetro y las habilidades a mano. Al terminar, la partida se guarda sola con sus habilidades y su duración.</p>
       </div>
 
       <!-- En juego -->
@@ -71,37 +71,19 @@
           <div id="game-timer" class="timer">0:00:00</div>
           <button type="button" id="game-pause" class="btn">⏸ Pausar</button>
           <button type="button" id="live-bored" class="bored-btn">🥱 ¿Te aburres en el turno de otro? <b>🎮 Mientras esperas</b></button>
-          <div class="round-row">
-            <button type="button" id="round-prev" class="icon-btn round-adj" aria-label="Corregir: ronda anterior">−</button>
-            <div class="round">Ronda <b id="game-round">1</b></div>
-            <button type="button" id="round-next" class="btn primary big">⏭ Siguiente ronda</button>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h2>🏅 Puntos de victoria</h2>
+            <span class="muted">A 10 se gana</span>
           </div>
+          <ul id="live-points" class="points-board"></ul>
         </div>
 
         <div class="card">
           <h2>Habilidades en juego</h2>
           <div id="live-abilities" class="live-abilities"></div>
-        </div>
-
-        <div class="card">
-          <h2>Penalizaciones activas</h2>
-          <ul id="effects-list" class="effects"></ul>
-          <div class="effect-form">
-            <label class="field">Carta
-              <select id="effect-card"></select>
-            </label>
-            <input type="text" id="effect-custom" class="input" maxlength="40" placeholder="Nombre de la penalización" hidden>
-            <div class="effect-row">
-              <label class="field">Afecta a
-                <select id="effect-player"></select>
-              </label>
-              <label class="field">Rondas
-                <input type="number" id="effect-rounds" min="1" max="20" value="1" inputmode="numeric">
-              </label>
-            </div>
-            <button type="button" id="effect-add" class="btn">＋ Añadir penalización</button>
-          </div>
-          <p class="muted small-note">Con «Siguiente ronda» todas bajan una ronda y avisan al terminar. ✕ = se libra antes (p. ej. doble 1 o doble 6 en El Destierro).</p>
         </div>
 
         <div class="card">
@@ -124,10 +106,12 @@
         <h2 id="summary-title"></h2>
         <p id="summary-meta" class="muted"></p>
         <p id="summary-invalid" class="warn" hidden>⚠️ Menos de 3 fundadores: la partida queda en el historial pero no cuenta para la liga.</p>
+        <ul id="summary-points" class="summary-points" hidden></ul>
         <ul id="summary-achievements" class="summary-ach"></ul>
         <button type="button" id="summary-thumb" class="summary-thumb" aria-label="Ver foto" hidden><img alt="Foto del tablero"></button>
         <button type="button" id="summary-photo" class="btn">📷 Añadir foto del tablero</button>
         <button type="button" id="summary-share" class="btn primary big">📤 Compartir en WhatsApp</button>
+        <button type="button" id="summary-rematch" class="btn big rematch-btn">🔁 Revancha <small>(mismos jugadores, habilidades nuevas)</small></button>
         <button type="button" id="summary-new" class="btn">Nueva partida</button>
       </div>
     </section>
@@ -167,6 +151,7 @@
           <button type="button" id="league-share" class="btn" hidden>📋 Mandar al grupo</button>
           <button type="button" id="league-image" class="btn" hidden>🖼️ Imagen</button>
           <button type="button" id="wrapped-open" class="btn wrapped-btn" hidden>🎁 Wrapped</button>
+          <button type="button" id="mesa-open" class="btn">📺 Modo mesa</button>
         </div>
         <p class="legend">🥇 🥈 🥉 podio · 🪵 cuchara de madera</p>
       </div>
@@ -252,6 +237,21 @@
         </details>
       </div>
 
+      <div class="card stats-global cal-card">
+        <div class="card-head">
+          <h2>📅 Calendario</h2>
+          <div class="cal-nav">
+            <button type="button" id="cal-prev" class="btn small-btn" aria-label="Mes anterior">‹</button>
+            <span id="cal-month" class="cal-month"></span>
+            <button type="button" id="cal-next" class="btn small-btn" aria-label="Mes siguiente">›</button>
+          </div>
+        </div>
+        <div id="cal-kpis" class="kpis"></div>
+        <div id="cal-grid" class="cal-grid" role="grid" aria-label="Partidas del mes"></div>
+        <p class="legend">Más color = más partidas ese día · toca un día para verlas</p>
+        <ul id="cal-day" class="cal-day" hidden></ul>
+      </div>
+
       <div class="card stats-player">
         <div id="profile-players" class="chip-group"></div>
         <div id="profile-titles" class="title-chips"></div>
@@ -314,6 +314,10 @@
         </div>
         <p id="deck-subtitle" class="subtitle"></p>
         <p class="muted">Solo las cartas activas entran en el sorteo. Los cambios se guardan solos.</p>
+        <div class="row deck-tools">
+          <button type="button" id="table-new" class="btn">＋ Nueva tabla</button>
+          <button type="button" id="table-edit" class="btn" hidden>✏️ Editar tabla</button>
+        </div>
         <button id="card-add" class="btn add">＋ Añadir carta</button>
         <ol id="deck-list" class="holy-list"></ol>
       </div>
@@ -342,7 +346,7 @@
     <section id="view-fun" class="view">
       <p id="fun-context" class="fun-context"></p>
       <nav id="fun-nav" class="fun-nav" aria-label="Juegos">
-        <button type="button" data-go="g-sheep">🐑 Ovejas</button>
+        <button type="button" data-go="g-sheep"><svg class="res-ico" viewBox="0 0 40 52" aria-hidden="true"><use href="#res-loly"/></svg> Loly</button>
         <button type="button" data-go="g-hilo">🎲 Mayor o menor</button>
         <button type="button" data-go="g-simon">🎵 Simón</button>
         <button type="button" data-go="g-build">⚡ ¿Te llega?</button>
@@ -354,10 +358,10 @@
 
       <div id="g-sheep" class="card">
         <div class="card-head">
-          <h2>🐑 Atrapa la oveja</h2>
+          <h2><svg class="res-ico" viewBox="0 0 40 52" aria-hidden="true"><use href="#res-loly"/></svg> Atrapa a Loly</h2>
           <span id="sheep-score" class="muted"></span>
         </div>
-        <p class="muted">30 segundos. 🐑 +1 · 🐑 dorada +3 · 🏴‍☠️ el ladrón te quita 2.</p>
+        <p class="muted">30 segundos. Loly +1 · Loly dorada +3 · 🏴‍☠️ el ladrón te quita 2.</p>
         <div class="sheep-timer"><span id="sheep-bar"></span></div>
         <div id="sheep-field" class="sheep-field"></div>
         <div class="sheep-foot">
@@ -419,7 +423,7 @@
           <span id="slots-coins" class="muted"></span>
         </div>
         <div id="slots" class="slots">
-          <span class="reel">🌲</span><span class="reel">🐑</span><span class="reel">⛰️</span>
+          <span class="reel"></span><span class="reel"></span><span class="reel"></span>
         </div>
         <p id="slots-msg" class="game-result" aria-live="polite"></p>
         <button type="button" id="slots-spin" class="btn primary big">🎰 Tirar (1 🪙)</button>
@@ -534,16 +538,40 @@
         <div id="edit-winner" class="chip-group"></div>
       </fieldset>
       <label class="field">Nota <input type="text" id="edit-note" maxlength="80"></label>
-      <div class="effect-row">
-        <label class="field">Duración (min) <input type="number" id="edit-duration" min="0" max="999" inputmode="numeric"></label>
-        <label class="field">Rondas <input type="number" id="edit-rounds" min="0" max="99" inputmode="numeric"></label>
-      </div>
+      <label class="field">Duración (min) <input type="number" id="edit-duration" min="0" max="999" inputmode="numeric"></label>
       <div class="row">
         <button type="button" class="btn" data-act="cancel">Cancelar</button>
         <button type="submit" class="btn primary">💾 Guardar</button>
       </div>
     </form>
   </dialog>
+
+  <!-- Crear / editar tabla propia -->
+  <dialog id="table-editor" class="edit-dialog">
+    <form method="dialog">
+      <h2 id="te-title">＋ Nueva tabla</h2>
+      <div class="te-row">
+        <label class="field te-icon">Icono <input type="text" id="te-icon" maxlength="4" placeholder="🃏"></label>
+        <label class="field">Nombre <input type="text" id="te-name" maxlength="30" placeholder="The Beer Table" required></label>
+      </div>
+      <label class="field">Nombre corto (botones) <input type="text" id="te-short" maxlength="12" placeholder="Beer"></label>
+      <label class="field">Subtítulo <input type="text" id="te-subtitle" maxlength="60" placeholder="Codex Cervisiae · Ars Bibendi"></label>
+      <label class="field">Color <input type="color" id="te-color" value="#5b6b7a"></label>
+      <label class="check"><input type="checkbox" id="te-extended"> Cartas con coste para ti y beneficio para el resto</label>
+      <div class="row">
+        <button type="button" class="btn danger subtle" data-act="delete" hidden>🗑️ Borrar tabla</button>
+        <button type="button" class="btn" data-act="cancel">Cancelar</button>
+        <button type="submit" class="btn primary">💾 Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Modo mesa: pantalla grande para dejar el móvil/tablet en la mesa -->
+  <div id="mesa" class="mesa" role="dialog" aria-modal="true" aria-label="Modo mesa" hidden>
+    <button type="button" class="mesa-close" aria-label="Salir del modo mesa">✕</button>
+    <div class="mesa-stage"></div>
+    <div class="mesa-dots"></div>
+  </div>
 
   <!-- Visor de fotos -->
   <dialog id="photo-viewer" class="photo-viewer">
@@ -567,20 +595,22 @@
     </div>
   </div>
 
-  <script src="js/storage.js?v=1.7.0"></script>
-  <script src="js/stats.js?v=1.7.0"></script>
-  <script src="js/charts.js?v=1.7.0"></script>
-  <script src="js/photos.js?v=1.7.0"></script>
-  <script src="js/backup.js?v=1.7.0"></script>
-  <script src="js/imagen.js?v=1.7.0"></script>
-  <script src="js/tracker.js?v=1.7.0"></script>
-  <script src="js/tables.js?v=1.7.0"></script>
-  <script src="js/game.js?v=1.7.0"></script>
-  <script src="js/profile.js?v=1.7.0"></script>
-  <script src="js/rules.js?v=1.7.0"></script>
-  <script src="js/fun.js?v=1.7.0"></script>
-  <script src="js/wrapped.js?v=1.7.0"></script>
-  <script src="js/app.js?v=1.7.0"></script>
+  <script src="js/storage.js?v=1.9.0"></script>
+  <script src="js/stats.js?v=1.9.0"></script>
+  <script src="js/recursos.js?v=1.9.0"></script>
+  <script src="js/charts.js?v=1.9.0"></script>
+  <script src="js/photos.js?v=1.9.0"></script>
+  <script src="js/backup.js?v=1.9.0"></script>
+  <script src="js/imagen.js?v=1.9.0"></script>
+  <script src="js/tracker.js?v=1.9.0"></script>
+  <script src="js/tables.js?v=1.9.0"></script>
+  <script src="js/game.js?v=1.9.0"></script>
+  <script src="js/profile.js?v=1.9.0"></script>
+  <script src="js/rules.js?v=1.9.0"></script>
+  <script src="js/fun.js?v=1.9.0"></script>
+  <script src="js/wrapped.js?v=1.9.0"></script>
+  <script src="js/mesa.js?v=1.9.0"></script>
+  <script src="js/app.js?v=1.9.0"></script>
   <!-- Red de seguridad: si app.js no llega a cargar (archivo de otra versión, error de sintaxis,
        navegador antiguo), al menos las pestañas funcionan y se avisa del problema. -->
   <script>

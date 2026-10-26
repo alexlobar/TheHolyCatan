@@ -22,10 +22,12 @@ const Storage = (() => {
   const str = v => (typeof v === 'string' ? v : v == null ? '' : String(v));
 
   // Definición de las tablas de cartas de la casa. `extended` añade los campos coste/beneficio.
-  // En los textos, *así* se muestra en cursiva.
-  const TABLES = [
+  // `off`: no entra en el sorteo hasta que se active en «Tablas en juego». En los textos, *así*
+  // se muestra en cursiva. Las tablas creadas desde la app van en state.customTables.
+  const BUILTIN = [
     {
       id: 'holy',
+      color: '#c9971c',
       icon: '😇',
       short: 'Holy',
       name: 'The Holy Table',
@@ -40,6 +42,7 @@ const Storage = (() => {
     },
     {
       id: 'martyr',
+      color: '#6b4c9a',
       icon: '🕯️',
       short: 'Martyr',
       name: 'The Martyr Table',
@@ -55,6 +58,7 @@ const Storage = (() => {
     },
     {
       id: 'shit',
+      color: '#7a5230',
       icon: '💩',
       short: 'Shit',
       name: 'The Shit Table',
@@ -67,7 +71,97 @@ const Storage = (() => {
         ['La Ruina', 'No puedes construir nada durante 3 rondas. *Sí cobras y cambias, pero tus manos están encadenadas.*'],
       ],
     },
+    {
+      id: 'war',
+      color: '#9b2c2c',
+      icon: '⚔️',
+      short: 'War',
+      name: 'The War Table',
+      subtitle: 'Codex Belli · Ars Conflictus',
+      off: true,
+      cards: [
+        ['El Asedio', 'Elige un jugador: no puede construir junto a tus poblados durante 2 rondas.'],
+        ['La Emboscada', 'Mueve el ladrón a cualquier hexágono y roba 2 cartas en vez de 1.'],
+        ['El Duelo', 'Tú y un rival tiráis un dado; el mayor roba 2 cartas al otro. *Empate: ambos pierden 1.*'],
+        ['La Traición', 'Rompe un acuerdo comercial ya hecho este turno: devolvéis las cartas.'],
+        ['El Mercenario', 'Paga 2 materiales a otro jugador para que mueva el ladrón donde tú digas.'],
+      ],
+    },
+    {
+      id: 'fortune',
+      color: '#2e8b57',
+      icon: '🍀',
+      short: 'Fortune',
+      name: 'The Fortune Table',
+      subtitle: 'Codex Fortunæ · Alea Iacta Est',
+      off: true,
+      cards: [
+        ['La Rueda', 'Todos pasan su mano entera al jugador de la izquierda.'],
+        ['El Doble o Nada', 'Tira un dado: con par, duplica tus cartas de recurso; con impar, pierdes la mitad.'],
+        ['El Trébol', 'La próxima tirada de 7 te la puedes saltar: no descartas ni te roban.'],
+        ['La Profecía', 'Elige un número: si sale en las próximas 2 tiradas, cobras triple.'],
+        ['El Comodín', 'Cambia el número de una ficha por otro durante 1 ronda.'],
+      ],
+    },
+    {
+      id: 'crown',
+      color: '#1f6fb2',
+      icon: '👑',
+      short: 'Crown',
+      name: 'The Crown Table',
+      subtitle: 'Codex Regalis · Privilegia Coronæ',
+      off: true,
+      cards: [
+        ['El Decreto', 'Prohíbe un material a todos durante 1 ronda: nadie puede comerciarlo.'],
+        ['El Tributo', 'Cada jugador te da 1 material a su elección.'],
+        ['La Corte', 'Tus puertos funcionan 2:1 con cualquier material durante 2 rondas.'],
+        ['El Heredero', 'Tu próxima ciudad cuesta 1 de paja menos.'],
+        ['La Abdicación', 'Pierdes 1 punto de victoria, pero robas 2 cartas de desarrollo gratis.'],
+      ],
+    },
+    {
+      id: 'chaos',
+      color: '#d2551e',
+      icon: '🌋',
+      short: 'Chaos',
+      name: 'The Chaos Table',
+      subtitle: 'Codex Chaos · Mundus Inversus',
+      off: true,
+      cards: [
+        ['El Terremoto', 'Intercambia dos fichas de número del tablero para el resto de la partida.'],
+        ['La Sequía', 'Durante 1 ronda nadie cobra un material a elegir por quien robó la carta.'],
+        ['La Marea', 'Los puertos quedan cerrados durante 2 rondas.'],
+        ['El Éxodo', 'Todos mueven una carretera propia a otro sitio legal.'],
+        ['El Eclipse', 'La próxima ronda se juega en sentido contrario.'],
+      ],
+    },
   ];
+
+  // Lista viva de tablas (las de serie + las creadas en la app). Se modifica en el sitio para
+  // que los módulos que la guardaron (const { TABLES } = Storage) vean siempre la actual.
+  const TABLES = [...BUILTIN];
+
+  // Saneado de las tablas propias: { id, icon, short, name, subtitle, color, extended }.
+  function cleanCustom(list) {
+    return (Array.isArray(list) ? list : [])
+      .filter(t => t && typeof t === 'object' && t.id && !BUILTIN.some(b => b.id === t.id))
+      .map(t => ({
+        id: str(t.id),
+        icon: str(t.icon).slice(0, 4) || '🎴',
+        name: str(t.name).slice(0, 40) || 'Tabla sin nombre',
+        short: str(t.short || t.name).slice(0, 12) || 'Tabla',
+        subtitle: str(t.subtitle).slice(0, 60),
+        color: /^#[0-9a-f]{6}$/i.test(t.color) ? t.color : '#5b6b7a',
+        extended: !!t.extended,
+        custom: true,
+        cards: [],
+      }));
+  }
+
+  function syncTables(custom) {
+    TABLES.length = 0;
+    TABLES.push(...BUILTIN, ...cleanCustom(custom));
+  }
 
   // Duración en rondas de las cartas con efecto prolongado (para el contador de penalizaciones).
   const DEFAULT_ROUNDS = { 'El Destierro': 2, 'El Cordero': 2, 'El Bloqueo': 2, 'La Maldición': 2, 'La Ruina': 3 };
@@ -89,7 +183,7 @@ const Storage = (() => {
 
   const defaultDeck = def => ({ cards: def.cards.map(c => newCard(def, ...c)) });
   const defaultDecks = () => Object.fromEntries(TABLES.map(t => [t.id, defaultDeck(t)]));
-  const defaultDraw = () => ({ tables: TABLES.map(t => t.id), slots: [] });
+  const defaultDraw = () => ({ tables: BUILTIN.filter(t => !t.off).map(t => t.id), slots: [] });
   const defaultSettings = () => ({ seasonMode: 'year' }); // year | quarter | none (la liga es anual)
 
   const FOUNDERS_RULE = ['⚠️ Victorias válidas', `Para que la victoria sea válida debe haber un **mínimo de ${MIN_FOUNDERS} fundadores** (${FOUNDERS.join(', ')}). Si no, la partida queda en el historial pero **no cuenta para la liga**.`];
@@ -97,7 +191,7 @@ const Storage = (() => {
   // Reglas de la casa de ejemplo (editables en 📜 Reglas). En los textos: *cursiva* y **negrita**.
   const defaultRules = () => [
     ['Las 5 cartas de colores', 'En cada partida, la app sortea una habilidad para cada carta: **negra, verde, naranja, morada y azul** (🎴 Holy Table). Quien juega una carta de color aplica la habilidad que le ha tocado en esa partida.'],
-    ['¿Qué es una ronda?', 'Una ronda termina cuando el turno vuelve a quien empezó la partida. Las penalizaciones con duración se descuentan con **⏭ Siguiente ronda** en 🎲 Partida.'],
+    ['¿Qué es una ronda?', 'Una ronda termina cuando el turno vuelve a quien empezó la partida. Las cartas que duran «X rondas» se cuentan así.'],
     ['El Destierro', 'No juegas 2 rondas: sin cobrar, te afectan los 7 y no puedes cambiar. *Te libras antes si sacas doble 1 o doble 6.*'],
     ['La Absolución', 'Todos (excepto quien la juega) quedan libres de las penalizaciones activas; quien la juega recibe al ladrón.'],
     ['Discusiones', 'Si no hay acuerdo, decide el dado: **par** gana quien reclama, **impar** el otro. Sin recurso.'],
@@ -106,12 +200,13 @@ const Storage = (() => {
   ].map(([title, text]) => ({ id: uid(), title, text }));
 
   const defaults = () => ({
-    version: 7,
+    version: 8,
     players: [...PLAYERS],
     legacy: clone(LEGACY), // { [año]: { jugador: victorias } } de la liga de WhatsApp
     // { id, date, players, winner, note, abilities?: [{ color, deck, name }], duration?: segundos,
-    //   rounds?, photo?: true (la foto vive en IndexedDB, ver photos.js) }
+    //   points?: { jugador: puntos de victoria }, photo?: true (la foto vive en IndexedDB) }
     games: [],
+    customTables: [], // tablas de cartas creadas desde la app
     rules: defaultRules(), // [{ id, title, text }]
     decks: {},   // { [tablaId]: { cards: [{ id, name, desc, enabled, rounds, cost?, benefit? }] } }
     draw: defaultDraw(), // mesa de la partida: tablas que entran + slots[i] = { deck, card } para COLORS[i] (o null)
@@ -126,7 +221,15 @@ const Storage = (() => {
   //  v1: `holy` = 5 usos fijos · v2: `cards` + `table` = un único mazo
   //  v3: `decks` por tabla, cada uno con su mesa · v4: una sola mesa de 5 colores (`draw`)
   //  v5: `rounds` en las cartas, `settings` (temporadas) y `current` (partida en curso)
-  //  v6: `rules` · v7: `legacy` (liga de WhatsApp), temporadas anuales y regla de fundadores.
+  //  v6: `rules` · v7: `legacy` (liga de WhatsApp), temporadas anuales y regla de fundadores
+  //  v8: tablas nuevas (War, Fortune, Crown, Chaos), tablas propias y puntos de victoria.
+  const cleanPoints = p => {
+    if (!p || typeof p !== 'object') return undefined;
+    const out = {};
+    for (const [k, v] of Object.entries(p)) { const n = parseInt(v, 10); if (k && Number.isFinite(n)) out[k] = Math.max(0, Math.min(30, n)); }
+    return Object.keys(out).length ? out : undefined;
+  };
+
   function normalize(data) {
     const s = { ...defaults(), ...data };
     const prev = data.version || 0;
@@ -150,13 +253,14 @@ const Storage = (() => {
         winner: str(g.winner),
         note: str(g.note),
         abilities: Array.isArray(g.abilities) ? g.abilities.filter(a => a && a.name) : undefined,
+        points: cleanPoints(g.points),
       }));
     if (!Array.isArray(s.players) || !s.players.length) s.players = [...PLAYERS];
     s.rules = s.rules.filter(r => r && typeof r === 'object').map(r => ({ id: str(r.id) || uid(), title: str(r.title), text: str(r.text) }));
     if (s.current) {
       s.current.abilities = Array.isArray(s.current.abilities) ? s.current.abilities : [];
       s.current.effects = Array.isArray(s.current.effects) ? s.current.effects : [];
-      s.current.round = Math.max(1, parseInt(s.current.round, 10) || 1);
+      s.current.points = cleanPoints(s.current.points) || Object.fromEntries(s.current.players.map(p => [p, 2]));
     }
     if (!s.draw || typeof s.draw !== 'object') s.draw = defaultDraw();
     // Una sola vez al pasar a v7: la liga es anual y entra la regla de los fundadores.
@@ -165,6 +269,9 @@ const Storage = (() => {
       if (!s.rules.some(r => r.title === FOUNDERS_RULE[0])) s.rules.unshift({ id: uid(), title: FOUNDERS_RULE[0], text: FOUNDERS_RULE[1] });
     }
     const decks = data.decks && typeof data.decks === 'object' ? { ...data.decks } : {};
+    // Tablas propias: se sanean y se añaden a la lista viva antes de crear sus mazos.
+    syncTables(data.customTables);
+    s.customTables = TABLES.filter(t => t.custom).map(({ cards, custom, ...t }) => t);
 
     const old = Array.isArray(data.cards) ? data.cards : Array.isArray(data.holy) ? data.holy : null;
     if (!decks.holy && old && old.some(c => !isPlaceholder(c))) {
@@ -186,7 +293,7 @@ const Storage = (() => {
     }
 
     const draw = data.draw && typeof data.draw === 'object' ? data.draw : defaultDraw();
-    const tables = (Array.isArray(draw.tables) ? draw.tables : []).filter(id => decks[id]);
+    const tables = (Array.isArray(draw.tables) ? draw.tables : []).filter(id => decks[id] && TABLES.some(t => t.id === id));
     const exists = slot => slot && decks[slot.deck]?.cards.some(c => c.id === slot.card);
     s.draw = {
       tables: tables.length ? tables : defaultDraw().tables,
@@ -195,9 +302,11 @@ const Storage = (() => {
         : [],
     };
 
+    // Mazos de tablas que ya no existen (p. ej. una tabla propia borrada): fuera.
+    for (const id of Object.keys(decks)) if (!TABLES.some(t => t.id === id)) delete decks[id];
     s.decks = decks;
     delete s.holy; delete s.cards; delete s.table;
-    s.version = 7;
+    s.version = 8;
     return s;
   }
 
@@ -235,6 +344,7 @@ const Storage = (() => {
 
   return {
     TABLES,
+    syncTables,
     COLORS,
     defaultDraw,
     defaultRules,

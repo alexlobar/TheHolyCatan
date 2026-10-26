@@ -28,7 +28,7 @@ const Profile = (() => {
   const defOf = id => Storage.TABLES.find(t => t.id === id);
   const badge = deck => {
     const d = defOf(deck);
-    return d ? `<span class="origin origin-${d.id}">${d.icon} ${d.short}</span>` : '';
+    return d ? `<span class="origin" style="--accent:${d.color}">${d.icon} ${Stats.esc(d.short)}</span>` : '';
   };
 
   function init() {
@@ -42,6 +42,14 @@ const Profile = (() => {
     });
     $('#evo-season').addEventListener('change', e => { evoSeason = e.target.value; renderEvolution(); });
     $('#stats-mode-btn').addEventListener('click', () => setMode(statsMode === 'player' ? 'global' : 'player'));
+    $('#cal-prev').addEventListener('click', () => moveMonth(-1));
+    $('#cal-next').addEventListener('click', () => moveMonth(1));
+    $('#cal-grid').addEventListener('click', e => {
+      const b = e.target.closest('[data-day]');
+      if (!b) return;
+      calDay = calDay === b.dataset.day ? null : b.dataset.day;
+      renderCalendar();
+    });
     try { statsMode = localStorage.getItem(MODE_KEY) || 'global'; } catch {}
     // El SVG se dibuja al ancho real: repintar al girar el móvil o cambiar el tamaño.
     window.addEventListener('resize', () => {
@@ -143,12 +151,70 @@ const Profile = (() => {
       <tbody>${players.map(p => `<tr><td>${esc(Stats.who(p))}</td><td>${last[p]}</td></tr>`).join('')}</tbody>`;
   }
 
+  // ---------- Calendario de partidas (todas las registradas en la app) ----------
+
+  const WEEKDAYS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+  const pad = n => String(n).padStart(2, '0');
+  let calMonth = null; // 'AAAA-MM' que se está viendo
+  let calDay = null;   // 'AAAA-MM-DD' abierto
+
+  function moveMonth(delta) {
+    const [y, m] = calMonth.split('-').map(Number);
+    const d = new Date(y, m - 1 + delta, 1);
+    calMonth = `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+    calDay = null;
+    renderCalendar();
+  }
+
+  function renderCalendar() {
+    const games = state().games.filter(g => g.date);
+    if (!calMonth) calMonth = (games[0]?.date || Stats.today()).slice(0, 7);
+    const byDay = {};
+    for (const g of games) (byDay[g.date] = byDay[g.date] || []).push(g);
+
+    // KPIs de siempre: días jugados y día de la semana favorito.
+    const weekday = [0, 0, 0, 0, 0, 0, 0];
+    for (const day of Object.keys(byDay)) weekday[new Date(day + 'T00:00').getDay()] += byDay[day].length;
+    const fav = weekday.indexOf(Math.max(...weekday));
+    const inMonth = Object.keys(byDay).filter(d => d.startsWith(calMonth));
+    $('#cal-kpis').innerHTML = [
+      ['Días jugados', Object.keys(byDay).length],
+      ['Día favorito', games.length ? `${WEEKDAYS[fav]} · ${weekday[fav]}` : '—'],
+      ['Este mes', inMonth.length ? `${inMonth.reduce((s, d) => s + byDay[d].length, 0)} en ${inMonth.length} ${inMonth.length === 1 ? 'día' : 'días'}` : '—'],
+    ].map(([k, v]) => `<div class="kpi"><span class="kpi-label">${k}</span><span class="kpi-value">${v}</span></div>`).join('');
+
+    const [y, m] = calMonth.split('-').map(Number);
+    $('#cal-month').textContent = Stats.fmtMonth(calMonth);
+    const first = (new Date(y, m - 1, 1).getDay() + 6) % 7; // lunes = 0
+    const days = new Date(y, m, 0).getDate();
+    const today = Stats.today();
+    const cells = ['L', 'M', 'X', 'J', 'V', 'S', 'D'].map(d => `<span class="cal-wd">${d}</span>`);
+    for (let i = 0; i < first; i++) cells.push('<span></span>');
+    for (let d = 1; d <= days; d++) {
+      const key = `${calMonth}-${pad(d)}`;
+      const n = byDay[key]?.length || 0;
+      const lvl = Math.min(n, 3);
+      cells.push(`<button type="button" class="cal-cell lvl-${lvl} ${key === today ? 'today' : ''} ${key === calDay ? 'sel' : ''}" data-day="${key}" ${n ? '' : 'disabled'}
+        aria-label="${d}: ${n ? `${n} ${n === 1 ? 'partida' : 'partidas'}` : 'sin partidas'}">${d}${n > 1 ? `<small>${n}</small>` : ''}</button>`);
+    }
+    $('#cal-grid').innerHTML = cells.join('');
+
+    const list = calDay && byDay[calDay];
+    $('#cal-day').hidden = !list;
+    $('#cal-day').innerHTML = list ? `<li class="cal-day-head">${Stats.fmtDate(calDay, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</li>` + list.map(g => `
+      <li>
+        <b>Partida ${toRoman(Stats.gameNumber(state().games, g))}</b> · 🏆 ${esc(Stats.who(g.winner))}
+        <span class="muted">${[g.players.length + ' jugadores', g.duration && Stats.fmtDuration(g.duration), g.points && Stats.pointsLine(g)].filter(Boolean).map(esc).join(' · ')}</span>
+      </li>`).join('') : '';
+  }
+
   function render() {
     const { players, settings } = state();
     const games = Stats.valid(state().games); // solo partidas que cuentan para la liga
     if (!players.includes(player)) player = players[0];
     renderHistory();
     renderEvolution();
+    renderCalendar();
 
     $('#profile-players').innerHTML = players.map(p =>
       `<button type="button" class="chip ${p === player ? 'on' : ''}" data-p="${esc(p)}">${esc(Stats.who(p))}</button>`).join('');
@@ -191,6 +257,8 @@ const Profile = (() => {
       <li><span>📈 Mejor mes</span><b>${month(pr.bestMonth)}</b></li>
       <li><span>📉 Peor mes</span><b>${month(pr.worstMonth)}</b></li>
       ${pr.avgWin ? `<li><span>⏱ Duración media de sus victorias</span><b>${Stats.fmtDuration(pr.avgWin)}</b></li>` : ''}
+      ${pr.scored ? `<li><span>🏅 Media de puntos</span><b>${pr.avgPoints.toFixed(1).replace('.', ',')} en ${pr.scored} ${pr.scored === 1 ? 'partida' : 'partidas'}</b></li>
+      <li><span>😩 Veces que se quedó a uno</span><b>${pr.oneAway ? `${pr.oneAway} (con ${Stats.POINTS_GOAL - 1} puntos)` : 'ninguna'}</b></li>` : ''}
       ${titles.length ? `<li><span>🏆 Campeón en</span><b>${titles.map(t => esc(t.label)).join(', ')}</b></li>` : ''}`;
 
     // Cara a cara: victorias de cada uno en las partidas que han jugado juntos.

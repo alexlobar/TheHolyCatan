@@ -1,5 +1,5 @@
 // 🎮 Mientras esperas: cosas que hacer en el turno de los demás.
-//  · Atrapa la oveja: reflejos, 30 s.
+//  · Atrapa a Loly: reflejos, 30 s.
 //  · Parejas de recursos: memory de 12 cartas.
 //  · Generador de tableros: tablero aleatorio (6 y 8 nunca juntos) para la próxima partida.
 //  · Ruleta de la mesa: elige a alguien al azar.
@@ -32,7 +32,7 @@ const Fun = (() => {
   // Cada juego arranca por separado: si uno falla, los demás siguen.
   function init() {
     loadBest();
-    for (const [name, fn] of [['ovejas', initSheep], ['parejas', initMemory], ['tableros', initBoard], ['ruleta', initWheel],
+    for (const [name, fn] of [['Loly', initSheep], ['parejas', initMemory], ['tableros', initBoard], ['ruleta', initWheel],
       ['mayor o menor', initHilo], ['simón', initSimon], ['¿te llega?', initBuild], ['tragaperras', initSlots]]) {
       try { fn(); } catch (e) { console.error(`Juego ${name}`, e); }
     }
@@ -64,7 +64,7 @@ const Fun = (() => {
     }
   }
 
-  // ---------- 🐑 Atrapa la oveja ----------
+  // ---------- Atrapa a Loly ----------
 
   const SHEEP_SECS = 30;
   const sheep = { running: false, score: 0, end: 0, timers: [], cells: [] };
@@ -108,7 +108,7 @@ const Fun = (() => {
       const item = roll < 0.12 ? 'gold' : roll < 0.37 ? 'robber' : 'sheep';
       cell.dataset.item = item;
       cell.className = `hole up ${item}`;
-      cell.textContent = item === 'robber' ? '🏴‍☠️' : '🐑';
+      cell.innerHTML = item === 'robber' ? '🏴‍☠️' : Res.icon('loly');
       const life = 1150 - progress * 500;
       setTimeout(() => { if (cell.dataset.item === item) clear(cell); }, life);
     }
@@ -147,18 +147,19 @@ const Fun = (() => {
     const record = sheep.score > best.sheep;
     if (record) { best.sheep = sheep.score; saveBest(); }
     $('#sheep-result').textContent = record
-      ? `🏆 ¡Nuevo récord: ${sheep.score} ovejas!`
-      : `${sheep.score} ${sheep.score === 1 ? 'oveja' : 'ovejas'}. ${randomItem(['El ladrón se ríe de ti.', 'Las ovejas siguen sueltas.', 'Pastor en prácticas.', 'Algo es algo.'])}`;
+      ? `🏆 ¡Nuevo récord: ${sheep.score} Lolys!`
+      : `${sheep.score} ${sheep.score === 1 ? 'Loly' : 'Lolys'}. ${randomItem(['El ladrón se ríe de ti.', 'Las Lolys siguen sueltas.', 'Pastor en prácticas.', 'Algo es algo.'])}`;
     renderSheepScore();
   }
 
   function renderSheepScore() {
-    $('#sheep-score').innerHTML = `Ovejas <b>${sheep.score}</b> · Récord <b>${best.sheep}</b>`;
+    $('#sheep-score').innerHTML = `Lolys <b>${sheep.score}</b> · Récord <b>${best.sheep}</b>`;
   }
 
   // ---------- 🃏 Parejas de recursos ----------
 
-  const RESOURCES = [['🌲', 'Madera'], ['🧱', 'Ladrillo'], ['🐑', 'Lana'], ['🌾', 'Trigo'], ['⛰️', 'Mineral'], ['🏴‍☠️', 'Ladrón']];
+  // [id, nombre] de los 5 recursos (js/recursos.js) + el ladrón.
+  const RESOURCES = [...Res.LIST.map(r => [r.id, r.name]), ['ladron', 'Ladrón']];
   const mem = { deck: [], open: [], done: new Set(), moves: 0, start: 0, lock: false };
 
   function initMemory() {
@@ -177,9 +178,9 @@ const Fun = (() => {
     mem.moves = 0;
     mem.start = 0;
     mem.lock = false;
-    $('#memory-grid').innerHTML = mem.deck.map(([icon, name], k) => `
+    $('#memory-grid').innerHTML = mem.deck.map(([id, name], k) => `
       <button type="button" class="mcard" data-k="${k}" aria-label="Carta ${k + 1}">
-        <span class="back">⬡</span><span class="front">${icon}<small>${name}</small></span>
+        <span class="back">⬡</span><span class="front">${id === 'ladron' ? '<span class="emo">🏴‍☠️</span>' : Res.icon(id)}<small>${name}</small></span>
       </button>`).join('');
     $('#memory-result').textContent = '';
     renderMemoryScore();
@@ -231,12 +232,12 @@ const Fun = (() => {
     ...Array(3).fill('hill'), ...Array(3).fill('mountain'), 'desert',
   ];
   const T = {
-    forest: { icon: '🌲', name: 'Madera', fill: '#2f6b3a' },
-    pasture: { icon: '🐑', name: 'Lana', fill: '#8cc56b' },
-    field: { icon: '🌾', name: 'Trigo', fill: '#e3c04a' },
-    hill: { icon: '🧱', name: 'Ladrillo', fill: '#c0643a' },
-    mountain: { icon: '⛰️', name: 'Mineral', fill: '#8a8f99' },
-    desert: { icon: '🏜️', name: 'Desierto', fill: '#e6d3a3' },
+    forest: { res: 'madera', name: 'Madera', fill: '#2f6b3a' },
+    pasture: { res: 'loly', name: 'Loly', fill: '#8cc56b' },
+    field: { res: 'paja', name: 'Paja', fill: '#e3c04a' },
+    hill: { res: 'barro', name: 'Barro', fill: '#c0643a' },
+    mountain: { res: 'piedra', name: 'Piedra', fill: '#8a8f99' },
+    desert: { res: null, name: 'Desierto', fill: '#e6d3a3' },
   };
   const NUMBERS = [2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12];
   const PIPS = n => 6 - Math.abs(7 - n);
@@ -289,7 +290,7 @@ const Fun = (() => {
       return `
         <g>
           <polygon points="${corners(cx, cy)}" fill="${info.fill}" class="tile"/>
-          <text x="${cx}" y="${cy - 17}" text-anchor="middle" class="tile-icon">${info.icon}</text>
+          ${info.res ? Res.use(info.res, cx - 7, cy - 38, 14) : `<text x="${cx}" y="${cy - 17}" text-anchor="middle" class="tile-icon">🏜️</text>`}
           ${t.number ? `
             <circle cx="${cx}" cy="${cy + 6}" r="14" class="token"/>
             <text x="${cx}" y="${cy + 11}" text-anchor="middle" class="token-n ${hot ? 'hot' : ''}">${t.number}</text>
@@ -305,7 +306,7 @@ const Fun = (() => {
     const prod = {};
     for (const t of tiles) if (t.number) prod[t.terrain] = (prod[t.terrain] || 0) + PIPS(t.number);
     const list = Object.entries(prod).sort((a, b) => b[1] - a[1]);
-    $('#board-stats').innerHTML = `Producción: ${list.map(([k, v]) => `${T[k].icon} <b>${v}</b>`).join(' · ')}
+    $('#board-stats').innerHTML = `Producción: ${list.map(([k, v]) => `${Res.icon(T[k].res)} <b>${v}</b>`).join(' · ')}
       <br><span class="muted">El más abundante: ${T[list[0][0]].name} · el más escaso: ${T[list[list.length - 1][0]].name}</span>`;
   }
 
@@ -356,13 +357,13 @@ const Fun = (() => {
 
   // ---------- 🎵 Simón de recursos ----------
 
-  const SIMON = [['🌲', 'Madera', '#2f6b3a'], ['🧱', 'Ladrillo', '#c0643a'], ['🐑', 'Lana', '#8cc56b'], ['🌾', 'Trigo', '#e3c04a'], ['⛰️', 'Mineral', '#8a8f99']];
+  const SIMON = Res.LIST.map(r => [r.id, r.name, r.color]);
   const simon = { seq: [], pos: 0, busy: false, playing: false };
   const sleep = ms => new Promise(r => setTimeout(r, ms));
 
   function initSimon() {
-    $('#simon-pad').innerHTML = SIMON.map(([icon, name, color], i) =>
-      `<button type="button" class="simon-btn" data-i="${i}" style="--sc:${color}" aria-label="${name}">${icon}</button>`).join('');
+    $('#simon-pad').innerHTML = SIMON.map(([id, name, color], i) =>
+      `<button type="button" class="simon-btn" data-i="${i}" style="--sc:${color}" aria-label="${name}">${Res.icon(id)}</button>`).join('');
     $('#simon-pad').addEventListener('pointerdown', e => {
       const b = e.target.closest('.simon-btn');
       if (b) pressSimon(+b.dataset.i);
@@ -408,7 +409,7 @@ const Fun = (() => {
       simon.playing = false;
       navigator.vibrate?.(150);
       if (level > best.simon) { best.simon = level; saveBest(); }
-      return renderSimon(`✘ Era ${SIMON[simon.seq[simon.pos]][0]}. Llegaste al nivel ${level}.${level === best.simon && level ? ' 🏆 ¡Récord!' : ''}`);
+      return renderSimon(`✘ Era ${SIMON[simon.seq[simon.pos]][1]}. Llegaste al nivel ${level}.${level === best.simon && level ? ' 🏆 ¡Récord!' : ''}`);
     }
     simon.pos++;
     if (simon.pos === simon.seq.length) {
@@ -421,12 +422,14 @@ const Fun = (() => {
   // ---------- ⚡ ¿Te llega? ----------
 
   // Costes del juego base.
-  const RES = [['🌲', 'madera'], ['🧱', 'ladrillo'], ['🐑', 'lana'], ['🌾', 'trigo'], ['⛰️', 'mineral']];
+  // Costes del juego base con vuestros nombres: madera, barro (ladrillo), loly (lana),
+  // paja (trigo) y piedra (mineral).
+  const RES = Res.LIST.map(r => r.id);
   const BUILDS = [
-    { name: 'Carretera', icon: '🛣️', cost: { madera: 1, ladrillo: 1 } },
-    { name: 'Poblado', icon: '🏠', cost: { madera: 1, ladrillo: 1, lana: 1, trigo: 1 } },
-    { name: 'Ciudad', icon: '🏰', cost: { trigo: 2, mineral: 3 } },
-    { name: 'Carta de desarrollo', icon: '🃏', cost: { lana: 1, trigo: 1, mineral: 1 } },
+    { name: 'Carretera', icon: '🛣️', cost: { madera: 1, barro: 1 } },
+    { name: 'Poblado', icon: '🏠', cost: { madera: 1, barro: 1, loly: 1, paja: 1 } },
+    { name: 'Ciudad', icon: '🏰', cost: { paja: 2, piedra: 3 } },
+    { name: 'Carta de desarrollo', icon: '🃏', cost: { loly: 1, paja: 1, piedra: 1 } },
   ];
   const BUILD_SECS = 30;
   const build = { running: false, score: 0, end: 0, timer: null, hand: null, target: null };
@@ -436,14 +439,15 @@ const Fun = (() => {
     $('#build-yes').addEventListener('click', () => answerBuild(true));
     $('#build-no').addEventListener('click', () => answerBuild(false));
     $('#build-costs').innerHTML = BUILDS.map(b =>
-      `<li>${b.icon} ${b.name}: ${Object.entries(b.cost).map(([r, n]) => RES.find(x => x[1] === r)[0].repeat(n)).join(' ')}</li>`).join('');
+      `<li>${b.icon} ${b.name}: ${Object.entries(b.cost).map(([r, n]) =>
+        `<span class="cost">${Res.icon(r)}${n > 1 ? `×${n}` : ''} ${Res.name(r)}</span>`).join(' ')}</li>`).join('');
     renderBuild();
   }
 
   function newHand() {
     // Mano cerca del coste (para que haya duda): a veces llega justo, a veces falta uno.
     build.target = randomItem(BUILDS);
-    const hand = Object.fromEntries(RES.map(([, r]) => [r, Math.floor(Math.random() * 2)]));
+    const hand = Object.fromEntries(RES.map(r => [r, Math.floor(Math.random() * 2)]));
     for (const [r, n] of Object.entries(build.target.cost)) hand[r] = Math.max(0, n + randomItem([-1, 0, 0, 1]));
     build.hand = hand;
   }
@@ -456,8 +460,8 @@ const Fun = (() => {
     $('#build-score').innerHTML = `Aciertos <b>${build.score}</b> · Récord <b>${best.build}</b>`;
     $('#build-msg').textContent = msg;
     if (!build.running || !build.hand) return;
-    $('#build-hand').innerHTML = RES.map(([icon, r]) =>
-      `<span class="res ${build.hand[r] ? '' : 'zero'}">${icon}<b>${build.hand[r]}</b></span>`).join('');
+    $('#build-hand').innerHTML = RES.map(r =>
+      `<span class="res ${build.hand[r] ? '' : 'zero'}" title="${Res.name(r)}">${Res.icon(r)}<b>${build.hand[r]}</b></span>`).join('');
     $('#build-target').textContent = `¿Te llega para ${build.target.icon} ${build.target.name}?`;
   }
 
@@ -497,10 +501,12 @@ const Fun = (() => {
   // ---------- 🎰 Tragaperras del puerto ----------
 
   // 🏴‍☠️ es poco frecuente pero sale; ⭐ es el comodín raro.
-  const REEL = ['🌲', '🌲', '🧱', '🧱', '🐑', '🐑', '🌾', '🌾', '⛰️', '⛰️', '🏴‍☠️', '⭐'];
+  const REEL = ['madera', 'madera', 'barro', 'barro', 'loly', 'loly', 'paja', 'paja', 'piedra', 'piedra', '🏴‍☠️', '⭐'];
   const slots = { coins: 20, spinning: false };
+  const reelHtml = x => (Res.byId[x] ? Res.icon(x) : `<span class="emo">${x}</span>`);
 
   function initSlots() {
+    document.querySelectorAll('#slots .reel').forEach((el, i) => { el.innerHTML = reelHtml(['loly', 'paja', 'piedra'][i]); });
     $('#slots-spin').addEventListener('click', spinSlots);
     $('#slots-reset').addEventListener('click', () => { slots.coins = 20; renderSlots('Monedas repuestas. ¡Suerte!'); });
     renderSlots('Cada tirada cuesta 1 moneda.');
@@ -538,8 +544,8 @@ const Fun = (() => {
     await Promise.all(reels.map(async (el, i) => {
       const end = Date.now() + 500 + i * 350;
       el.classList.add('spin');
-      while (Date.now() < end) { el.textContent = randomItem(REEL); await sleep(70); }
-      el.textContent = result[i];
+      while (Date.now() < end) { el.innerHTML = reelHtml(randomItem(REEL)); await sleep(70); }
+      el.innerHTML = reelHtml(result[i]);
       el.classList.remove('spin');
     }));
     const p = prize(result);

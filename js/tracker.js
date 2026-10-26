@@ -203,7 +203,6 @@ const Tracker = (() => {
     dlg.querySelector('#edit-date').value = g.date || '';
     dlg.querySelector('#edit-note').value = g.note || '';
     dlg.querySelector('#edit-duration').value = g.duration ? Math.round(g.duration / 60) : '';
-    dlg.querySelector('#edit-rounds').value = g.rounds || '';
     renderEditChips();
     if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
   }
@@ -226,13 +225,11 @@ const Tracker = (() => {
     if (!g) return;
     const dlg = $('#edit-game');
     const mins = parseInt(dlg.querySelector('#edit-duration').value, 10);
-    const rounds = parseInt(dlg.querySelector('#edit-rounds').value, 10);
     g.date = dlg.querySelector('#edit-date').value || g.date;
     g.players = [...editing.players];
     g.winner = editing.winner;
     g.note = dlg.querySelector('#edit-note').value.trim();
     if (mins > 0) g.duration = mins * 60; else delete g.duration;
-    if (rounds > 0) g.rounds = rounds; else delete g.rounds;
     Storage.save();
     dlg.close();
     Backup.snapshot('Partida editada');
@@ -252,7 +249,7 @@ const Tracker = (() => {
     list.innerHTML = games.map((g, i) => {
       const d = g.date ? new Date(g.date + 'T00:00') : null;
       const others = g.players.filter(p => p !== g.winner);
-      const meta = [g.duration && `⏱ ${Stats.fmtDuration(g.duration)}`, g.rounds && `🔁 ${g.rounds} rondas`].filter(Boolean);
+      const meta = [g.duration && `⏱ ${Stats.fmtDuration(g.duration)}`, g.rounds && `🔁 ${g.rounds} rondas`, g.points && `🏅 ${Stats.pointsLine(g)}`].filter(Boolean);
       return `
       <li class="game ${Stats.isValid(g) ? '' : 'invalid'}">
         <div class="date-badge">

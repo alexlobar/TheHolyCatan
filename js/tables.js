@@ -1,5 +1,5 @@
 // Holy Table: mesa de la partida con las 5 cartas de colores (cada color recibe una habilidad
-// al azar sacada de las tablas elegidas) + editor de los mazos Holy, Martyr y Shit.
+// al azar sacada de las tablas elegidas) + editor de los mazos y de las tablas propias.
 const Tables = (() => {
   const $ = sel => document.querySelector(sel);
   const CURRENT_KEY = 'catan-app-deck';
@@ -36,6 +36,82 @@ const Tables = (() => {
     });
     $('#table-shuffle').addEventListener('click', newGame);
     $('#card-add').addEventListener('click', addCard);
+    $('#table-new').addEventListener('click', () => openEditor(null));
+    $('#table-edit').addEventListener('click', () => openEditor(defOf(current)));
+    initEditor();
+    render();
+  }
+
+  // ---------- Tablas propias (crear / editar / borrar) ----------
+
+  let editing = null; // tabla propia que se está editando (null = nueva)
+
+  function initEditor() {
+    const dlg = $('#table-editor');
+    dlg.querySelector('[data-act="cancel"]').addEventListener('click', () => dlg.close());
+    dlg.querySelector('[data-act="delete"]').addEventListener('click', () => { dlg.close(); deleteTable(editing); });
+    dlg.querySelector('form').addEventListener('submit', e => {
+      e.preventDefault();
+      if (saveTable()) dlg.close();
+    });
+  }
+
+  function openEditor(def) {
+    editing = def && def.custom ? def : null;
+    const t = editing || { icon: '🃏', name: '', short: '', subtitle: '', color: '#5b6b7a', extended: false };
+    $('#te-title').textContent = editing ? `✏️ Editar ${editing.name}` : '＋ Nueva tabla';
+    $('#te-icon').value = t.icon;
+    $('#te-name').value = t.name;
+    $('#te-short').value = t.short;
+    $('#te-subtitle').value = t.subtitle;
+    $('#te-color').value = t.color;
+    $('#te-extended').checked = !!t.extended;
+    $('#table-editor [data-act="delete"]').hidden = !editing;
+    $('#table-editor').showModal();
+  }
+
+  function saveTable() {
+    const name = $('#te-name').value.trim();
+    if (!name) { App.toast('Ponle nombre a la tabla'); return false; }
+    const data = {
+      icon: $('#te-icon').value.trim() || '🃏',
+      name,
+      short: $('#te-short').value.trim() || name.replace(/^the\s+/i, '').split(/\s+/)[0],
+      subtitle: $('#te-subtitle').value.trim(),
+      color: $('#te-color').value,
+      extended: $('#te-extended').checked,
+    };
+    const s = state();
+    if (editing) {
+      Object.assign(s.customTables.find(t => t.id === editing.id), data);
+    } else {
+      const id = 'c-' + Storage.uid();
+      s.customTables.push({ id, ...data });
+      s.decks[id] = { cards: [] };
+      draw().tables.push(id);
+      current = id;
+      try { localStorage.setItem(CURRENT_KEY, id); } catch {}
+    }
+    Storage.syncTables(s.customTables);
+    Storage.save();
+    App.toast(editing ? '💾 Tabla guardada' : `${data.icon} ${data.name} creada: añade sus cartas`);
+    render();
+    return true;
+  }
+
+  function deleteTable(def) {
+    if (!def || !confirm(`¿Borrar la tabla «${def.name}» y sus ${state().decks[def.id]?.cards.length || 0} cartas?`)) return;
+    Backup.snapshot('Antes de borrar una tabla');
+    const s = state();
+    s.customTables = s.customTables.filter(t => t.id !== def.id);
+    delete s.decks[def.id];
+    s.draw.tables = s.draw.tables.filter(id => id !== def.id);
+    if (!s.draw.tables.length) s.draw.tables = Storage.defaultDraw().tables;
+    s.draw.slots = s.draw.slots.map(sl => (sl && sl.deck === def.id ? null : sl));
+    Storage.syncTables(s.customTables);
+    current = TABLES[0].id;
+    Storage.save();
+    App.toast(`🗑️ Tabla «${def.name}» borrada (hay copia en Ajustes)`);
     render();
   }
 
@@ -64,15 +140,11 @@ const Tables = (() => {
       const card = cardOf(slot);
       return card && {
         color: COLORS[i].id, deck: slot.deck, card: card.id, name: card.name, desc: card.desc,
-        cost: card.cost || '', benefit: card.benefit || '', rounds: card.rounds || 0,
+        cost: card.cost || '', benefit: card.benefit || '',
       };
     }).filter(Boolean);
   }
 
-  // Todas las cartas con duración (para añadir penalizaciones a mano en el modo partida).
-  const timedCards = () => TABLES.flatMap(t => state().decks[t.id].cards
-    .filter(c => c.rounds > 0 && c.name.trim())
-    .map(c => ({ deck: t.id, card: c.id, name: c.name, rounds: c.rounds })));
 
   function newGame() {
     const pool = drawPool();
@@ -107,7 +179,7 @@ const Tables = (() => {
   function renderDrawTables() {
     $('#draw-tables').innerHTML = TABLES.map(t => {
       const on = draw().tables.includes(t.id);
-      return `<button type="button" class="chip deck-chip ${on ? 'on' : ''}" data-deck="${t.id}" aria-pressed="${on}">${t.icon} ${t.short}</button>`;
+      return `<button type="button" class="chip deck-chip ${on ? 'on' : ''}" style="--accent:${t.color}" data-deck="${t.id}" aria-pressed="${on}">${esc(t.icon)} ${esc(t.short)}</button>`;
     }).join('');
   }
 
@@ -119,7 +191,6 @@ const Tables = (() => {
       ${card.benefit ? `<span class="pill benefit">Resto: ${esc(card.benefit)}</span>` : ''}
     </div>`;
   }
-  const roundsPill = card => card.rounds > 0 ? `<span class="pill rounds">⏳ ${card.rounds} ${card.rounds === 1 ? 'ronda' : 'rondas'}</span>` : '';
 
   function renderSlots(animate = false) {
     const list = $('#table-list');
@@ -140,9 +211,9 @@ const Tables = (() => {
             ${card ? `
               <div class="slot-head">
                 <span class="name">${esc(card.name)}</span>
-                <span class="origin origin-${def.id}">${def.icon} ${def.short}</span>
+                <span class="origin" style="--accent:${def.color}">${esc(def.icon)} ${esc(def.short)}</span>
               </div>
-              ${extras(def, card)}${card.rounds > 0 ? `<div class="pills">${roundsPill(card)}</div>` : ''}
+              ${extras(def, card)}
               <div class="desc">${rich(card.desc)}</div>`
             : '<div class="desc">Sin habilidad. Pulsa ↻ para asignar una.</div>'}
           </div>
@@ -156,7 +227,11 @@ const Tables = (() => {
 
   const deck = () => state().decks[current];
   const byId = id => deck().cards.find(c => c.id === id);
-  const countText = () => `${deck().cards.length} cartas · ${deck().cards.filter(usable).length} activas`;
+  const countText = () => {
+    const n = deck().cards.length;
+    const on = deck().cards.filter(usable).length;
+    return `${n} ${n === 1 ? 'carta' : 'cartas'} · ${on} ${on === 1 ? 'activa' : 'activas'}`;
+  };
 
   function selectDeck(id) {
     current = id;
@@ -165,10 +240,13 @@ const Tables = (() => {
   }
 
   function renderDeck() {
+    if (!defOf(current)) current = TABLES[0].id;
     const def = defOf(current);
-    $('#deck-card').dataset.deck = def.id;
+    $('#deck-card').style.setProperty('--accent', def.color);
     $('#deck-switch').innerHTML = TABLES.map(t =>
-      `<button type="button" role="tab" data-deck="${t.id}" class="${t.id === def.id ? 'active' : ''}" aria-selected="${t.id === def.id}">${t.icon} ${t.short}</button>`).join('');
+      `<button type="button" role="tab" data-deck="${t.id}" style="--accent:${t.color}" class="${t.id === def.id ? 'active' : ''}" aria-selected="${t.id === def.id}">${esc(t.icon)} ${esc(t.short)}</button>`).join('');
+    $('#deck-switch .active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    $('#table-edit').hidden = !def.custom;
     $('#deck-title').textContent = def.name;
     $('#deck-subtitle').textContent = def.subtitle;
     $('#deck-count').textContent = countText();
@@ -191,12 +269,7 @@ const Tables = (() => {
           <input type="text" data-field="cost" value="${esc(c.cost || '')}" maxlength="40" placeholder="Coste para ti" aria-label="Coste para ti">
           <input type="text" data-field="benefit" value="${esc(c.benefit || '')}" maxlength="40" placeholder="Beneficio para el resto" aria-label="Beneficio para el resto">
         </div>` : ''}
-        <textarea data-field="desc" maxlength="300" placeholder="¿Qué hace esta carta? (*texto* = cursiva)" aria-label="Efecto de la carta">${esc(c.desc)}</textarea>
-        <label class="rounds-field">⏳ Dura
-          <input type="number" data-field="rounds" value="${c.rounds || 0}" min="0" max="20" inputmode="numeric" aria-label="Duración en rondas">
-          rondas <span class="hint">(0 = efecto inmediato)</span>
-        </label>
-      </li>`).join('');
+        <textarea data-field="desc" maxlength="300" placeholder="¿Qué hace esta carta? (*texto* = cursiva)" aria-label="Efecto de la carta">${esc(c.desc)}</textarea>      </li>`).join('');
 
     list.querySelectorAll('[data-field]').forEach(el => {
       el.addEventListener(el.type === 'checkbox' ? 'change' : 'input', onEdit);
@@ -208,9 +281,7 @@ const Tables = (() => {
     const li = e.target.closest('li');
     const card = byId(li.dataset.id);
     const field = e.target.dataset.field;
-    card[field] = field === 'enabled' ? e.target.checked
-      : field === 'rounds' ? Math.max(0, Math.min(20, parseInt(e.target.value, 10) || 0))
-      : e.target.value;
+    card[field] = field === 'enabled' ? e.target.checked : e.target.value;
     if (field === 'enabled') li.classList.toggle('off', !card.enabled);
     $('#deck-count').textContent = countText();
     if (onTable({ deck: current, card: card.id }, draw().slots)) renderSlots();
@@ -250,11 +321,15 @@ const Tables = (() => {
   }
 
   function reset() {
+    // Vuelven las tablas de la casa con sus cartas de ejemplo; las tablas propias se borran.
+    state().customTables = [];
+    Storage.syncTables([]);
+    current = TABLES[0].id;
     state().decks = Storage.defaultDecks();
     state().draw = Storage.defaultDraw();
     Storage.save();
     render();
   }
 
-  return { init, render, reset, newGame, snapshot, timedCards };
+  return { init, render, reset, newGame, snapshot };
 })();

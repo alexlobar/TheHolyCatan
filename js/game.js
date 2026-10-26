@@ -1,5 +1,5 @@
-// Modo partida: preparar (jugadores + habilidades), jugar (cronómetro, rondas, penalizaciones
-// activas) y terminar (ganador → se guarda con habilidades, duración y rondas).
+// Modo partida: preparar (jugadores + habilidades), jugar (cronómetro, puntos de victoria y
+// habilidades en juego) y terminar (ganador → se guarda con habilidades, puntos y duración).
 // La partida en curso vive en Storage.get().current, así que sobrevive a cerrar la app.
 const Game = (() => {
   const $ = sel => document.querySelector(sel);
@@ -20,10 +20,6 @@ const Game = (() => {
     $('#game-start').addEventListener('click', start);
     $('#setup-redraw-now').addEventListener('click', () => { Tables.newGame(); renderSetup(); });
     $('#game-pause').addEventListener('click', togglePause);
-    $('#round-next').addEventListener('click', nextRound);
-    $('#round-prev').addEventListener('click', () => changeRound(-1));
-    $('#effect-card').addEventListener('change', onEffectCard);
-    $('#effect-add').addEventListener('click', addEffect);
     $('#game-finish').addEventListener('click', finish);
     $('#game-cancel').addEventListener('click', cancel);
     $('#summary-share').addEventListener('click', () => summary && Tracker.shareGame(summary.gameId));
@@ -31,6 +27,11 @@ const Game = (() => {
     $('#summary-thumb').addEventListener('click', () => summary && Photos.view(summary.gameId));
     $('#live-bored').addEventListener('click', () => App.show('fun'));
     $('#summary-new').addEventListener('click', () => { summary = null; render(); });
+    $('#summary-rematch').addEventListener('click', rematch);
+    $('#live-points').addEventListener('click', e => {
+      const b = e.target.closest('.pb-btn');
+      if (b) addPoint(b.dataset.p, +b.dataset.d);
+    });
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') keepAwake();
     });
@@ -106,102 +107,76 @@ const Game = (() => {
   function start() {
     if (setupPlayers.size < 2) return App.toast('Selecciona al menos 2 jugadores');
     const redraw = !$('#setup-redraw-row').hidden && $('#setup-redraw').checked;
-    if (redraw || !Tables.snapshot().length) Tables.newGame();
+    begin(state().players.filter(p => setupPlayers.has(p)), redraw);
+    App.toast('▶ ¡Que empiece la partida!');
+  }
 
+  // Revancha: mismos jugadores que la partida recién terminada y habilidades nuevas.
+  function rematch() {
+    const g = summary && state().games.find(x => x.id === summary.gameId);
+    if (!g) return;
+    const players = g.players.filter(p => state().players.includes(p));
+    if (players.length < 2) return App.toast('Faltan jugadores para la revancha');
+    setupPlayers = new Set(players);
+    summary = null;
+    begin(players, true);
+    App.toast(`🔁 ¡Revancha! ${Stats.who(g.winner)} defiende la corona`);
+  }
+
+  function begin(players, redraw) {
+    if (redraw || !Tables.snapshot().length) Tables.newGame();
     state().current = {
       date: Stats.today(),
-      players: state().players.filter(p => setupPlayers.has(p)),
+      players,
       abilities: Tables.snapshot(),
-      round: 1,
       timer: { acc: 0, since: Date.now() },
-      effects: [],
+      points: Object.fromEntries(players.map(p => [p, START_POINTS])),
     };
     finishWinner = null;
     Storage.save();
-    App.toast('▶ ¡Que empiece la partida!');
     render();
     window.scrollTo(0, 0);
   }
 
-  // ---------- En juego ----------
+  // ---------- Puntos de victoria ----------
 
-  function changeRound(delta) {
-    const c = cur();
-    c.round = Math.max(1, c.round + delta);
-    Storage.save();
-    renderLive();
-  }
+  const START_POINTS = 2; // los 2 poblados iniciales
+  const GOAL = 10;
 
-  function nextRound() {
+  function addPoint(p, delta) {
     const c = cur();
-    c.round++;
-    const ended = [];
-    for (const e of c.effects) {
-      e.left--;
-      if (e.left <= 0) ended.push(e);
+    const before = c.points[p] ?? START_POINTS;
+    const now = Math.max(0, Math.min(30, before + delta));
+    if (now === before) return;
+    c.points[p] = now;
+    if (delta > 0 && now >= GOAL && before < GOAL) {
+      finishWinner = p;
+      App.toast(`🏆 ¡${Stats.who(p)} llega a ${now}! Marcado como ganador abajo`);
+      navigator.vibrate?.([80, 60, 160]);
+      renderWinner();
     }
-    c.effects = c.effects.filter(e => e.left > 0);
     Storage.save();
-    renderLive();
-    App.toast(ended.length
-      ? `✔ Termina: ${ended.map(e => `${e.name} (${e.player})`).join(', ')}`
-      : `Ronda ${c.round}`);
+    renderPoints();
   }
 
-  // Opciones de carta para una penalización: las que están en juego y las demás con duración.
-  function effectOptions() {
+  function renderPoints() {
     const c = cur();
-    const inGame = c.abilities.map((a, i) => ({ value: `a:${i}`, label: a.name, rounds: a.rounds || 1, deck: a.deck, name: a.name }));
-    const names = new Set(c.abilities.map(a => a.deck + '|' + a.name));
-    const others = Tables.timedCards()
-      .filter(t => !names.has(t.deck + '|' + t.name))
-      .map(t => ({ value: `t:${t.deck}:${t.card}`, label: `${defOf(t.deck).icon} ${t.name}`, rounds: t.rounds, deck: t.deck, name: t.name }));
-    return { inGame, others };
+    const max = Math.max(...c.players.map(p => c.points[p] ?? START_POINTS));
+    $('#live-points').innerHTML = c.players.map((p, i) => {
+      const pts = c.points[p] ?? START_POINTS;
+      const cls = pts >= GOAL ? 'goal' : pts === GOAL - 1 ? 'near' : pts === max ? 'lead' : '';
+      return `
+        <li class="${cls}" style="--pc:var(--p${(state().players.indexOf(p) % 4) + 1})">
+          <span class="pb-name">${esc(Stats.who(p))}</span>
+          <div class="pb-bar" aria-hidden="true"><span style="width:${Math.min(100, pts / GOAL * 100)}%"></span></div>
+          <button type="button" class="pb-btn" data-p="${esc(p)}" data-d="-1" aria-label="Quitar un punto a ${esc(p)}">−</button>
+          <span class="pb-pts" aria-live="polite">${pts}</span>
+          <button type="button" class="pb-btn plus" data-p="${esc(p)}" data-d="1" aria-label="Sumar un punto a ${esc(p)}">+</button>
+        </li>`;
+    }).join('');
   }
 
-  function renderEffectForm() {
-    const c = cur();
-    const { inGame, others } = effectOptions();
-    const opt = o => `<option value="${o.value}">${esc(o.label)}</option>`;
-    $('#effect-card').innerHTML =
-      (inGame.length ? `<optgroup label="En juego">${inGame.map(opt).join('')}</optgroup>` : '') +
-      (others.length ? `<optgroup label="Otras con duración">${others.map(opt).join('')}</optgroup>` : '') +
-      '<option value="__custom">✏️ Otra (escribir)…</option>';
-    $('#effect-player').innerHTML = [...c.players, 'Todos'].map(p => `<option>${esc(p)}</option>`).join('');
-    onEffectCard();
-  }
-
-  function onEffectCard() {
-    const v = $('#effect-card').value;
-    const { inGame, others } = effectOptions();
-    const o = [...inGame, ...others].find(x => x.value === v);
-    $('#effect-custom').hidden = v !== '__custom';
-    $('#effect-rounds').value = o ? o.rounds : 1;
-  }
-
-  function addEffect() {
-    const c = cur();
-    const v = $('#effect-card').value;
-    const { inGame, others } = effectOptions();
-    const o = [...inGame, ...others].find(x => x.value === v);
-    const name = o ? o.name : $('#effect-custom').value.trim();
-    if (!name) return App.toast('Escribe el nombre de la penalización');
-    const rounds = Math.max(1, Math.min(20, parseInt($('#effect-rounds').value, 10) || 1));
-    c.effects.push({ id: Storage.uid(), name, deck: o?.deck || null, player: $('#effect-player').value, left: rounds, total: rounds });
-    $('#effect-custom').value = '';
-    Storage.save();
-    renderLive();
-    App.toast(`⏳ ${name} → ${$('#effect-player').value} (${rounds} ${rounds === 1 ? 'ronda' : 'rondas'})`);
-  }
-
-  function removeEffect(id) {
-    const c = cur();
-    const e = c.effects.find(x => x.id === id);
-    c.effects = c.effects.filter(x => x.id !== id);
-    Storage.save();
-    renderLive();
-    if (e) App.toast(`🕊️ ${e.player} se libra de ${e.name}`);
-  }
+  // ---------- En juego ----------
 
   function renderLive() {
     const c = cur();
@@ -209,7 +184,6 @@ const Game = (() => {
     $('#game-timer').textContent = clock(elapsed(c));
     $('#game-timer').classList.toggle('paused', !running);
     $('#game-pause').textContent = running ? '⏸ Pausar' : '▶ Seguir';
-    $('#game-round').textContent = c.round;
     $('#live-players').textContent = c.players.map(Stats.who).join(' · ');
 
     $('#live-abilities').innerHTML = c.abilities.length ? c.abilities.map(a => {
@@ -220,7 +194,7 @@ const Game = (() => {
           <summary>
             <span class="dot" aria-hidden="true"></span>
             <span class="name">${esc(a.name)}</span>
-            <span class="origin origin-${a.deck}">${def ? def.icon : ''}</span>
+            <span class="origin" style="--accent:${def ? def.color : '#888'}">${def ? def.icon : ''}</span>
             <span class="sr-only">carta ${color?.name.toLowerCase()}</span>
           </summary>
           ${a.cost || a.benefit ? `<div class="pills">${a.cost ? `<span class="pill cost">Tú: ${esc(a.cost)}</span>` : ''}${a.benefit ? `<span class="pill benefit">Resto: ${esc(a.benefit)}</span>` : ''}</div>` : ''}
@@ -228,24 +202,17 @@ const Game = (() => {
         </details>`;
     }).join('') : '<p class="muted">Partida sin habilidades.</p>';
 
-    $('#effects-list').innerHTML = c.effects.length ? c.effects.map(e => `
-      <li class="effect" style="--accent:var(--deck-${e.deck || 'none'})">
-        <div class="info">
-          <div><b>${esc(e.name)}</b> → ${esc(e.player)}</div>
-          <div class="effect-left">
-            <span class="pips" aria-hidden="true">${'●'.repeat(e.left)}${'○'.repeat(Math.max(0, e.total - e.left))}</span>
-            ${e.left === 1 ? 'última ronda' : `quedan ${e.left} rondas`}
-          </div>
-        </div>
-        <button class="icon-btn" data-id="${e.id}" aria-label="Quitar ${esc(e.name)} de ${esc(e.player)}">✕</button>
-      </li>`).join('') : '<li class="empty">Sin penalizaciones activas.</li>';
-    $('#effects-list').querySelectorAll('[data-id]').forEach(b => b.addEventListener('click', () => removeEffect(b.dataset.id)));
+    renderPoints();
+    renderWinner();
+  }
 
+  function renderWinner() {
+    const c = cur();
     // Ganador: solo entre los que juegan.
     if (!c.players.includes(finishWinner)) finishWinner = null;
     $('#finish-winner').innerHTML = c.players.map(p =>
       `<button type="button" class="chip winner ${finishWinner === p ? 'on' : ''}" data-p="${esc(p)}">${esc(Stats.who(p))}</button>`).join('');
-    $('#finish-winner').querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => { finishWinner = b.dataset.p; renderLive(); }));
+    $('#finish-winner').querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => { finishWinner = b.dataset.p; renderWinner(); }));
   }
 
   // ---------- Terminar ----------
@@ -261,8 +228,12 @@ const Game = (() => {
       note: $('#finish-note').value.trim(),
       abilities: c.abilities.map(a => ({ color: a.color, deck: a.deck, name: a.name })),
       duration: Math.round(elapsed(c) / 1000),
-      rounds: c.round,
     };
+    // Los puntos solo se guardan si se ha usado el marcador.
+    const pts = c.points || {};
+    if (c.players.some(p => (pts[p] ?? START_POINTS) !== START_POINTS)) {
+      game.points = Object.fromEntries(c.players.map(p => [p, pts[p] ?? START_POINTS]));
+    }
     state().current = null;
     $('#finish-note').value = '';
     finishWinner = null;
@@ -290,10 +261,15 @@ const Game = (() => {
     if (!g) { summary = null; return render(); }
     $('#summary-title').textContent = `🏆 ${Stats.who(g.winner)} gana la Partida ${toRoman(Stats.gameNumber(s.games, g))}`;
     $('#summary-invalid').hidden = Stats.isValid(g);
-    $('#summary-meta').textContent = [Stats.fmtDuration(g.duration), g.rounds && `${g.rounds} rondas`, g.players.join(', ')].filter(Boolean).join(' · ');
+    $('#summary-meta').textContent = [Stats.fmtDuration(g.duration), g.players.join(', ')].filter(Boolean).join(' · ');
     $('#summary-achievements').innerHTML = summary.unlocked.map(a =>
       `<li><span class="ach-icon">${a.icon}</span> <b>${esc(a.player)}</b> desbloquea «${esc(a.name)}»</li>`).join('');
     $('#summary-achievements').hidden = !summary.unlocked.length;
+    const pts = g.points;
+    $('#summary-points').hidden = !pts;
+    $('#summary-points').innerHTML = pts ? [...g.players].sort((a, b) => (pts[b] ?? 0) - (pts[a] ?? 0)).map(p =>
+      `<li class="${p === g.winner ? 'win' : ''}"><span>${esc(Stats.who(p))}</span><b>${pts[p] ?? '–'}</b></li>`).join('') : '';
+    $('#summary-rematch').hidden = g.players.filter(p => s.players.includes(p)).length < 2;
     $('#summary-photo').textContent = g.photo ? '📷 Cambiar foto' : '📷 Añadir foto del tablero';
     $('#summary-thumb').hidden = !g.photo;
     if (g.photo) Photos.url(g.id).then(u => { if (u) $('#summary-thumb img').src = u; }).catch(() => {});
@@ -310,7 +286,6 @@ const Game = (() => {
 
     if (c) {
       renderLive();
-      renderEffectForm();
       startTicking();
       keepAwake();
     } else if (summary) {

@@ -91,6 +91,8 @@ body {
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .topbar h1 { margin: 0; font-size: 1.25rem; letter-spacing: .5px; white-space: nowrap; }
 .topbar-actions { display: flex; gap: 6px; }
+.topbar h1 { display: flex; align-items: center; gap: 8px; }
+.brand-logo { width: 34px; height: 34px; margin: -6px 0; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .35)); }
 .top-btn {
   width: 44px; height: 44px; margin: -6px 0;
   border: 0; border-radius: 12px;
@@ -323,12 +325,14 @@ table.stats { width: 100%; border-collapse: collapse; }
 }
 
 /* ================= Holy Table ================= */
-#deck-card, .origin-holy { --accent: var(--deck-holy); }
-#deck-card[data-deck="martyr"], .origin-martyr { --accent: var(--deck-martyr); }
-#deck-card[data-deck="shit"], .origin-shit { --accent: var(--deck-shit); }
+/* Cada tabla trae su color (style="--accent:…" desde JS); este es el de reserva. */
+#deck-card, .origin { --accent: var(--deck-holy); }
 
 .btn.add { width: 100%; margin-bottom: 12px; border-style: dashed; border-color: var(--accent); color: var(--accent); }
+.deck-tools { margin-bottom: 10px; }
+.deck-tools .btn { flex: 1; }
 
+/* Con muchas tablas, la barra se desliza en horizontal. */
 .deck-switch {
   display: flex;
   gap: 4px;
@@ -337,9 +341,13 @@ table.stats { width: 100%; border-collapse: collapse; }
   background: var(--sunken);
   border: 1px solid var(--line);
   border-radius: 999px;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
+.deck-switch::-webkit-scrollbar { display: none; }
 .deck-switch button {
-  flex: 1;
+  flex: 1 0 auto;
+  padding: 0 14px;
   min-height: 44px;
   border: 0;
   border-radius: 999px;
@@ -359,7 +367,6 @@ table.stats { width: 100%; border-collapse: collapse; }
 .pill { font-size: .75rem; font-weight: 700; padding: 3px 8px; border-radius: 999px; }
 .pill.cost { background: var(--cost-bg); color: var(--cost-ink); }
 .pill.benefit { background: var(--benefit-bg); color: var(--benefit-ink); }
-.pill.rounds { background: var(--rounds-bg); color: var(--rounds-ink); }
 
 .extra-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .extra-fields input { font-size: .9rem; }
@@ -367,6 +374,7 @@ table.stats { width: 100%; border-collapse: collapse; }
 .draw-from { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
 .draw-label { font-weight: 600; font-size: .9rem; }
 .deck-chip { padding: 6px 12px; min-height: 38px; font-size: .9rem; }
+.deck-chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 
 .table-list { list-style: none; padding: 0; margin: 0 0 12px; display: grid; gap: 10px; }
 .table-list li.slot {
@@ -439,12 +447,6 @@ table.stats { width: 100%; border-collapse: collapse; }
 .holy-list textarea { resize: vertical; min-height: 60px; }
 .toggle { display: flex; align-items: center; gap: 6px; font-size: .85rem; white-space: nowrap; }
 .toggle input { width: 20px; height: 20px; margin: 0; accent-color: var(--wood); }
-.rounds-field { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; font-size: .85rem; color: var(--muted); }
-.rounds-field input {
-  width: 64px; min-height: 40px; padding: 6px 8px; font: inherit;
-  border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink);
-}
-.hint { font-size: .75rem; }
 
 /* ================= Partida ================= */
 .setup-redraw { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
@@ -465,11 +467,6 @@ table.stats { width: 100%; border-collapse: collapse; }
 }
 .timer.paused { color: var(--muted); animation: pulse 1.5s ease-in-out infinite; }
 .live-head > .btn { min-width: 140px; }
-.round-row { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
-.round { font-size: 1rem; white-space: nowrap; }
-.round b { font-size: 1.6rem; color: var(--brick); vertical-align: -2px; }
-.round-row .btn.primary { flex: 1; }
-.round-adj { border: 1px solid var(--line); background: var(--surface); font-size: 1.4rem; }
 
 .live-abilities { display: grid; gap: 8px; }
 .live-ability {
@@ -492,20 +489,6 @@ table.stats { width: 100%; border-collapse: collapse; }
 .live-ability .desc { color: var(--muted); font-size: .9rem; padding: 0 0 12px; }
 .live-ability .pills { margin: 0 0 6px; }
 
-.effects { list-style: none; padding: 0; margin: 0 0 14px; display: grid; gap: 8px; }
-.effect {
-  display: flex; align-items: center; gap: 8px;
-  padding: 8px 4px 8px 12px;
-  border-radius: 10px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-left: 6px solid var(--accent);
-}
-.effect .info { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.effect-left { font-size: .85rem; color: var(--muted); margin-top: 2px; }
-.pips { color: var(--brick); letter-spacing: 2px; margin-right: 4px; }
-.effect-form { border-top: 1px dashed var(--line); padding-top: 12px; }
-.effect-row { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; }
 
 .summary { text-align: center; }
 .summary-trophy { font-size: 3.5rem; line-height: 1; animation: pop .5s ease; }
@@ -928,8 +911,9 @@ body.no-scroll { overflow: hidden; }
 .simon-btn {
   aspect-ratio: 1; border: 0; border-radius: 16px;
   background: var(--sc); font-size: 1.8rem; cursor: pointer;
-  opacity: .55; transition: opacity .1s, transform .1s;
+  opacity: .72; filter: saturate(.7); transition: opacity .1s, transform .1s, filter .1s;
 }
+.simon-btn.lit { filter: none; }
 .simon-btn.lit { opacity: 1; transform: scale(1.1); box-shadow: 0 0 0 4px #fff, 0 0 18px var(--sc); }
 
 .build-hand { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
@@ -951,6 +935,23 @@ body.no-scroll { overflow: hidden; }
 .reel.spin { filter: blur(1px); }
 #slots-spin:disabled { opacity: .5; }
 #g-slots .btn + .btn { margin-top: 8px; width: 100%; }
+
+/* ================= Iconos de recursos (js/recursos.js) ================= */
+/* Cartas pequeñas en SVG: el ancho sale solo de la proporción 40 × 52. */
+.res-ico { display: inline-block; height: 1.4em; width: auto; vertical-align: -0.35em; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .18)); }
+.emo { font-size: 1.9rem; line-height: 1; }
+.hole .res-ico { height: 74%; vertical-align: middle; }
+.hole.gold .res-ico { filter: sepia(1) saturate(5) hue-rotate(-12deg) brightness(1.1) drop-shadow(0 0 6px #fff); }
+.mcard .front .res-ico { height: 58%; }
+.simon-btn .res-ico { height: 80%; vertical-align: middle; }
+.build-hand .res .res-ico { height: 2.4rem; }
+.reel .res-ico { height: 74px; vertical-align: middle; }
+.reel .emo { font-size: 2.8rem; }
+.cost { white-space: nowrap; margin-right: 6px; }
+.cost .res-ico { height: 1.5em; }
+.board-stats .res-ico { height: 1.5em; }
+.fun-nav .res-ico { height: 1.3em; vertical-align: -0.35em; }
+h2 .res-ico { height: 1.3em; vertical-align: -0.3em; }
 
 /* ================= Barra inferior, avisos ================= */
 .tabbar {
@@ -1035,3 +1036,133 @@ body.no-scroll { overflow: hidden; }
   z-index: 20;
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ================= Partida: puntos de victoria ================= */
+.points-board { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.points-board li {
+  display: grid;
+  grid-template-columns: 1fr 44px auto 44px;
+  grid-template-areas: "name minus pts plus" "bar bar bar bar";
+  align-items: center;
+  gap: 4px 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 2px solid var(--line);
+  border-left: 6px solid var(--pc);
+}
+.pb-name { grid-area: name; font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pb-bar { grid-area: bar; height: 6px; border-radius: 999px; background: var(--sunken); overflow: hidden; }
+.pb-bar span { display: block; height: 100%; background: var(--pc); transition: width .25s; }
+.pb-pts { grid-area: pts; min-width: 1.4em; text-align: center; font-size: 1.7rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.pb-btn {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit; font-size: 1.4rem; font-weight: 800;
+  cursor: pointer;
+}
+.pb-btn[data-d="-1"] { grid-area: minus; }
+.pb-btn.plus { grid-area: plus; background: var(--pc); border-color: var(--pc); color: #fff; }
+.pb-btn:active { transform: scale(.92); }
+.points-board li.near { border-color: var(--wheat); border-left-color: var(--pc); }
+.points-board li.goal { border-color: var(--wheat); background: var(--gold-soft); border-left-color: var(--pc); }
+.points-board li.goal .pb-name::after { content: " 🏆"; }
+
+.summary-points { list-style: none; padding: 0; margin: 0 auto 14px; max-width: 320px; display: grid; gap: 4px; }
+.summary-points li { display: flex; justify-content: space-between; padding: 6px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); }
+.summary-points li.win { background: var(--gold-soft); font-weight: 700; }
+.rematch-btn { width: 100%; margin-bottom: 8px; border-color: var(--wheat); }
+.rematch-btn small { display: block; font-size: .75rem; font-weight: 500; color: var(--muted); }
+
+/* ================= Stats: calendario ================= */
+.cal-nav { display: flex; align-items: center; gap: 6px; }
+.cal-nav .btn { min-width: 40px; padding: 0 10px; }
+.cal-month { min-width: 9.5em; text-align: center; font-weight: 700; font-size: .95rem; }
+@media (max-width: 380px) { #cal-kpis .kpi:nth-child(3) { grid-column: span 2; } }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 8px; }
+.cal-wd { text-align: center; font-size: .75rem; font-weight: 700; color: var(--muted); padding: 2px 0; }
+.cal-cell {
+  position: relative;
+  aspect-ratio: 1;
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit; font-size: .85rem; font-weight: 600;
+  cursor: pointer;
+}
+.cal-cell:disabled { cursor: default; color: var(--muted); font-weight: 400; }
+.cal-cell small { position: absolute; top: 1px; right: 4px; font-size: .6rem; font-weight: 800; }
+.cal-cell.lvl-1 { background: color-mix(in srgb, var(--brick) 30%, var(--surface)); border-color: transparent; }
+.cal-cell.lvl-2 { background: color-mix(in srgb, var(--brick) 60%, var(--surface)); border-color: transparent; color: #fff; }
+.cal-cell.lvl-3 { background: var(--brick); border-color: transparent; color: #fff; }
+.cal-cell.today { outline: 2px solid var(--badge); outline-offset: 1px; }
+.cal-cell.sel { box-shadow: 0 0 0 3px var(--wheat); }
+.cal-day { list-style: none; padding: 0; margin: 6px 0 0; display: grid; gap: 6px; }
+.cal-day li { padding: 8px 10px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); font-size: .9rem; }
+.cal-day li .muted { display: block; font-size: .8rem; margin: 2px 0 0; }
+.cal-day .cal-day-head { background: none; border: 0; padding: 0; font-weight: 700; }
+.cal-day .cal-day-head::first-letter { text-transform: uppercase; }
+
+/* ================= Holy Table: editor de tablas propias ================= */
+.te-row { display: grid; grid-template-columns: 76px 1fr; gap: 8px; }
+.te-icon input { text-align: center; font-size: 1.3rem; }
+#te-color { height: 44px; padding: 2px; }
+#table-editor .row { flex-wrap: wrap; }
+
+/* ================= Modo mesa ================= */
+body.mesa-on { overflow: hidden; }
+.mesa {
+  position: fixed; inset: 0; z-index: 70;
+  display: flex; flex-direction: column;
+  padding: calc(16px + env(safe-area-inset-top)) 20px calc(16px + env(safe-area-inset-bottom));
+  background: radial-gradient(circle at 50% 0%, #3a2a1c, #120e0a 75%);
+  color: #f6ecd6;
+}
+.mesa-close {
+  position: absolute; top: calc(10px + env(safe-area-inset-top)); right: 12px;
+  width: 44px; height: 44px; border-radius: 50%;
+  border: 0; background: rgba(255, 255, 255, .12); color: #fff; font-size: 1.2rem; cursor: pointer;
+  z-index: 1;
+}
+.mesa-stage { flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; cursor: pointer; }
+.mesa-slide { width: min(100%, 900px); animation: pop .4s ease; }
+.mesa-kicker { text-align: center; font-size: clamp(1rem, 3.2vw, 1.6rem); font-weight: 700; color: var(--wheat); margin: 0 0 3vh; }
+.mesa-dots { display: flex; justify-content: center; gap: 8px; min-height: 10px; }
+.mesa-dots span { width: 10px; height: 10px; border-radius: 50%; background: rgba(255, 255, 255, .25); }
+.mesa-dots span.on { background: var(--wheat); }
+
+.mesa-rank { list-style: none; padding: 0; margin: 0; display: grid; gap: 1.6vh; }
+.mesa-rank li {
+  display: grid; grid-template-columns: 2.2ch 1fr auto; align-items: center; gap: 16px;
+  padding: 1.4vh 20px; border-radius: 16px;
+  background: rgba(255, 255, 255, .07);
+  font-size: clamp(1.4rem, 5.5vw, 3rem); font-weight: 700;
+}
+.mesa-rank li.first { background: rgba(232, 184, 74, .22); box-shadow: inset 0 0 0 2px var(--wheat); }
+.mesa-rank li.guest { opacity: .55; font-size: clamp(1rem, 3.6vw, 1.8rem); }
+.mr-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mr-wins { font-family: Georgia, "Times New Roman", serif; color: var(--wheat); }
+
+.mesa-points { list-style: none; padding: 0; margin: 0; display: grid; gap: 2vh; }
+.mesa-points li { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name n" "bar bar"; gap: 6px 16px; align-items: center; }
+.mp-name { grid-area: name; font-size: clamp(1.3rem, 5vw, 2.6rem); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mp-n { grid-area: n; font-size: clamp(2.2rem, 9vw, 5rem); font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.mp-bar { grid-area: bar; height: 14px; border-radius: 999px; background: rgba(255, 255, 255, .12); overflow: hidden; }
+.mp-bar i { display: block; height: 100%; background: var(--pc); }
+.mesa-points li.near .mp-n { color: var(--wheat); }
+.mesa-points li.goal .mp-n { color: var(--wheat); }
+.mesa-points li.goal .mp-name::after { content: " 🏆"; }
+
+.mesa-abilities { list-style: none; padding: 0; margin: 0; display: grid; gap: 1.4vh; }
+.mesa-abilities li {
+  padding: 1.2vh 16px; border-radius: 14px;
+  background: rgba(255, 255, 255, .07); border-left: 8px solid var(--slot);
+  font-size: clamp(.9rem, 2.6vw, 1.3rem);
+}
+.mesa-abilities b { display: block; font-size: 1.25em; }
+.mesa-abilities span { opacity: .8; }

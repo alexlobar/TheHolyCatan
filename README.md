@@ -12,22 +12,25 @@ Adaptada a móvil y tablet. Los datos se guardan en el `localStorage` del navega
 - Emojis de jugador: Serbest 👙 · Kristy 🏍️ · Bylexx 🐈 · Emi 💃🏼 (`EMOJI` en `js/storage.js`).
 
 ## Funciones
-- **🎲 Partida**: modo partida en curso. Eliges jugadores, se sortean las habilidades y empieza el cronómetro (con pausa). Contador de rondas y **penalizaciones activas** (La Ruina, El Destierro…) que bajan una ronda con «Siguiente ronda» y avisan al terminar. Al acabar eliges ganador y la partida se guarda con habilidades, duración y rondas; resumen con logros nuevos y botón para compartir. Sobrevive a cerrar la app y mantiene la pantalla encendida.
+- **🎲 Partida**: modo partida en curso. Eliges jugadores, se sortean las habilidades y empieza el cronómetro (con pausa), con las habilidades en juego a mano. **🏅 Marcador de puntos de victoria** (+/− por jugador, empieza en 2; al llegar a 10 avisa y deja marcado al ganador). Al acabar eliges ganador y la partida se guarda con habilidades, puntos y duración; resumen con puntos finales, logros nuevos, botón para compartir y **🔁 Revancha** (mismos jugadores, habilidades nuevas). Sobrevive a cerrar la app y mantiene la pantalla encendida.
+- **📺 Modo mesa** (botón en el Tracker): pantalla completa con la clasificación en grande para dejar el móvil o la tablet en la mesa; si hay partida en curso rota cada 12 s con el marcador de puntos y las habilidades en juego. Mantiene la pantalla encendida; tocar pasa a la siguiente, ✕ sale.
+- **📅 Calendario** (📊 Stats): mes a mes, cada día coloreado según las partidas jugadas; al tocar un día salen sus partidas. Con días jugados y día de la semana favorito.
+- **🏅 Estadísticas de puntos** (solo partidas jugadas con el marcador): media de puntos y veces que se quedó a uno en la ficha; récords de partida más ajustada y mayor paliza.
 - **🏆 Tracker**: clasificación por **temporada** (trimestral, anual o sin temporadas) con PJ, victorias en romanos, % y medallas 🥇🥈🥉🪵; **campeones** de cada temporada terminada; registro rápido (opcionalmente con las habilidades de la mesa); historial en fichas con duración, habilidades y botón **📤 compartir** (WhatsApp).
 - **📊 Stats**: ficha de cada jugador (racha actual y mejor racha, mejor y peor mes, títulos, duración media de sus victorias), **cara a cara** con cada rival, habilidades de la suerte, **14 logros** y tabla de **habilidades ganadoras**.
-- **🎴 Holy Table**: en cada partida, las 5 cartas de colores (negra, verde, naranja, morada, azul) reciben una habilidad al azar, sin repetir, sacada de las tablas elegidas: *The Holy Table*, *The Martyr Table* (con coste/beneficio) y *The Shit Table*. ↻ cambia la habilidad de un solo color. Cada tabla tiene un mazo ilimitado editable (añadir, editar, activar/desactivar, borrar, duración en rondas). En los textos, `*así*` se ve en cursiva.
+- **🎴 Holy Table**: en cada partida, las 5 cartas de colores (negra, verde, naranja, morada, azul) reciben una habilidad al azar, sin repetir, sacada de las tablas elegidas: *The Holy Table*, *The Martyr Table* (con coste/beneficio), *The Shit Table* y, apagadas hasta que las actives en «Tablas en juego», *The War Table*, *The Fortune Table*, *The Crown Table* y *The Chaos Table*. ↻ cambia la habilidad de un solo color. Cada tabla tiene un mazo ilimitado editable (añadir, editar, activar/desactivar, borrar). **＋ Nueva tabla** crea tablas propias (icono, nombre, subtítulo, color y si sus cartas llevan coste/beneficio); se editan o borran con **✏️ Editar tabla** (antes de borrar se hace copia automática). En los textos, `*así*` se ve en cursiva.
 - **⚙️ Ajustes**: instalar, tema (auto / claro / oscuro), temporadas, exportar/importar copia de seguridad en JSON y reinicios.
 - **📊 Evolución**: gráfico de victorias acumuladas por jugador (por temporada o histórico), con tooltip al tocar y vista de tabla. Colores fijos por jugador, validados con el script de la guía de visualización (claro y oscuro).
 - **📷 Fotos**: foto del tablero en cada partida (desde el resumen o el historial), visor a pantalla completa y se comparte junto al resumen. Se guardan comprimidas en IndexedDB **solo en ese dispositivo** (no van en la copia JSON).
 - **📜 Reglas de la casa** (botón de arriba): lista editable con buscador (sin tildes), reordenable, con **negrita** y *cursiva*.
 - **🎮 Mientras esperas** (botón de arriba o desde la partida), con atajos a cada juego: 🐑 Atrapa la oveja, 🎲 Mayor o menor (2 dados, con % de acierto), 🎵 Simón de recursos, ⚡ ¿Te llega? (mano vs. costes de construcción, 30 s), 🎰 Tragaperras del puerto, 🃏 Parejas de recursos, 🗺️ Generador de tableros y 🎯 Ruleta de la mesa. Récords por dispositivo.
 - **📦 Copias de seguridad** (`js/backup.js`): automáticas en el móvil (IndexedDB, las 15 últimas: al guardar/editar/borrar partidas, antes de importar o restaurar y una al día), restaurables desde Ajustes; y **fuera del móvil** con «📦 Guardar copia» (hoja de compartir → Drive, WhatsApp… o descarga). Cada 10 partidas sin copia fuera, aviso en el Tracker.
-- **↩ Deshacer** al borrar partidas, cartas y reglas (7 s); **✏️ Editar partidas** (fecha, jugadores, ganador, nota, duración, rondas).
+- **↩ Deshacer** al borrar partidas, cartas y reglas (7 s); **✏️ Editar partidas** (fecha, jugadores, ganador, nota, duración).
 - **🔮 Predicción de campeón** del año en curso: ritmo de partidas → partidas que quedan → simulación (4000 veces) con la probabilidad de cada uno.
 - **🖼️ Imagen de la clasificación** (`js/imagen.js`): tarjeta JPEG 1080 px para compartir en el grupo.
 - **📊 Stats** tiene arriba a la derecha el botón **👤 Ficha de jugador** (y «📊 General» para volver).
 - **🎖️ Títulos automáticos**: El Emperador, El Francotirador, El Imparable, Eterno segundo, El Mártir, El Santo, Rey de la Shit Table, El Rayo, El Fiel y El Leñador. Van al líder de cada dato (si lo comparte más de la mitad, queda vacante); el más exclusivo sale bajo el nombre en la clasificación.
-- **🏅 Récords del grupo** (partida más larga y más corta, más rondas, rachas, más victorias en una temporada, día más viciado…) y **némesis / víctima favorita** en la ficha de cada jugador.
+- **🏅 Récords del grupo** (partida más larga y más corta, más ajustada, mayor paliza, rachas, más victorias en una temporada, día más viciado…) y **némesis / víctima favorita** en la ficha de cada jugador.
 - **🎁 Wrapped de la temporada**: historias a pantalla completa (partidas, campeón, racha, habilidad talismán, partida eterna, cuchara de madera, títulos y clasificación) con botón para compartir.
 
 ## Uso local
@@ -64,14 +67,18 @@ js/stats.js       cálculos: temporadas, clasificación, fichas, logros, título
 js/charts.js      gráfico SVG de evolución
 js/photos.js      fotos de partidas (IndexedDB) y visor
 js/rules.js       reglas de la casa
+js/recursos.js    los 5 recursos de la casa (Paja, Madera, Loly, Piedra, Barro): nombres, cartas y logo de la app
+img/recursos/     imágenes de las cartas (recortes de las cartas del juego, uso personal del grupo)
+icons/logo.svg    logo sin fondo (barra superior); icon.svg e icons/*.png = icono de la app
 js/fun.js         Mientras esperas (8 juegos)
 js/backup.js      copias automáticas y copia fuera del móvil
 js/imagen.js      imagen de la clasificación
 js/wrapped.js     Wrapped de la temporada
+js/mesa.js        modo mesa (pantalla grande con clasificación, puntos y habilidades)
 js/tracker.js     clasificación, campeones, registro rápido e historial
-js/tables.js      Holy Table (mazos + mesa de 5 colores)
-js/game.js        modo partida: cronómetro, rondas, penalizaciones
-js/profile.js     pestaña Stats
+js/tables.js      Holy Table (mazos, tablas propias y mesa de 5 colores)
+js/game.js        modo partida: cronómetro, puntos de victoria y revancha
+js/profile.js     pestaña Stats (histórico, evolución, calendario, ficha)
 js/app.js         arranque, pestañas, tema, ajustes, instalar y compartir
 icons/            iconos PNG (iPhone 180, Android 192/512 maskable, favicon)
 sw.js             service worker (offline + instalable)
