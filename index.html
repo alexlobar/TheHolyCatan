@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es" data-build="1.10.0">
+<html lang="es" data-build="1.11.0">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -16,7 +16,7 @@
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="icon" href="icons/favicon-32.png" type="image/png" sizes="32x32">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" sizes="180x180">
-  <link rel="stylesheet" href="css/styles.css?v=1.10.0">
+  <link rel="stylesheet" href="css/styles.css?v=1.11.0">
 </head>
 <body>
   <header class="topbar">
@@ -153,9 +153,7 @@
         <div class="row ranking-actions">
           <button type="button" id="league-share" class="btn" hidden>📋 Mandar al grupo</button>
           <button type="button" id="league-image" class="btn" hidden>🖼️ Imagen</button>
-          <button type="button" id="wrapped-open" class="btn wrapped-btn" hidden>🎁 Wrapped</button>
-          <button type="button" id="mesa-open" class="btn">📺 Modo mesa</button>
-        </div>
+          <button type="button" id="wrapped-open" class="btn wrapped-btn" hidden>🎁 Wrapped</button>        </div>
         <p class="legend">🥇 🥈 🥉 podio · 🪵 cuchara de madera</p>
       </div>
 
@@ -481,7 +479,7 @@
       </div>
       <div class="card">
         <h2>👥 Jugadores</h2>
-        <p class="muted">Los 4 fundadores son fijos. Los invitados pueden jugar partidas; si los quitas de la lista, sus partidas se quedan en el historial.</p>
+        <p class="muted">Toca un jugador para ver su ficha. Los 4 fundadores son fijos. Los invitados pueden jugar partidas; si los quitas de la lista, sus partidas se quedan en el historial.</p>
         <ul id="players-list" class="players-list"></ul>
         <button type="button" id="guest-add" class="btn">＋ Añadir invitado</button>
       </div>
@@ -513,6 +511,7 @@
         <button id="reset-decks" class="btn danger">Restaurar tablas originales</button>
       </div>
       <p class="version">Catán Tracker · versión <span id="app-version"></span></p>
+      <p id="app-size" class="version"></p>
     </section>
   </main>
 
@@ -583,6 +582,10 @@
       <button type="button" class="mesa-close" aria-label="Salir del modo mesa">✕</button>
     </div>
     <div class="mesa-stage"></div>
+    <div class="mesa-game" hidden>
+      <button type="button" class="mg-back">← Otros juegos</button>
+      <div class="mg-slot"></div>
+    </div>
     <nav class="mesa-tabs" role="tablist" aria-label="Pantallas del modo mesa"></nav>
   </div>
 
@@ -624,22 +627,22 @@
     </div>
   </div>
 
-  <script src="js/storage.js?v=1.10.0"></script>
-  <script src="js/stats.js?v=1.10.0"></script>
-  <script src="js/recursos.js?v=1.10.0"></script>
-  <script src="js/charts.js?v=1.10.0"></script>
-  <script src="js/photos.js?v=1.10.0"></script>
-  <script src="js/backup.js?v=1.10.0"></script>
-  <script src="js/imagen.js?v=1.10.0"></script>
-  <script src="js/tracker.js?v=1.10.0"></script>
-  <script src="js/tables.js?v=1.10.0"></script>
-  <script src="js/game.js?v=1.10.0"></script>
-  <script src="js/profile.js?v=1.10.0"></script>
-  <script src="js/rules.js?v=1.10.0"></script>
-  <script src="js/fun.js?v=1.10.0"></script>
-  <script src="js/wrapped.js?v=1.10.0"></script>
-  <script src="js/mesa.js?v=1.10.0"></script>
-  <script src="js/app.js?v=1.10.0"></script>
+  <script src="js/storage.js?v=1.11.0"></script>
+  <script src="js/stats.js?v=1.11.0"></script>
+  <script src="js/recursos.js?v=1.11.0"></script>
+  <script src="js/charts.js?v=1.11.0"></script>
+  <script src="js/photos.js?v=1.11.0"></script>
+  <script src="js/backup.js?v=1.11.0"></script>
+  <script src="js/imagen.js?v=1.11.0"></script>
+  <script src="js/tracker.js?v=1.11.0"></script>
+  <script src="js/tables.js?v=1.11.0"></script>
+  <script src="js/game.js?v=1.11.0"></script>
+  <script src="js/profile.js?v=1.11.0"></script>
+  <script src="js/rules.js?v=1.11.0"></script>
+  <script src="js/fun.js?v=1.11.0"></script>
+  <script src="js/wrapped.js?v=1.11.0"></script>
+  <script src="js/mesa.js?v=1.11.0"></script>
+  <script src="js/app.js?v=1.11.0"></script>
   <!-- Red de seguridad: si app.js no llega a cargar (archivo de otra versión, error de sintaxis,
        navegador antiguo), al menos las pestañas funcionan y se avisa del problema. -->
   <script>

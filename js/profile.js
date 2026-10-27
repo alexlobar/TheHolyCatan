@@ -211,13 +211,15 @@ const Profile = (() => {
   function render() {
     const { players, settings } = state();
     const games = Stats.valid(state().games); // solo partidas que cuentan para la liga
-    if (!players.includes(player)) player = players[0];
+    // Fundadores e invitados (los invitados, solo si han jugado alguna partida o se abrió su ficha).
+    const roster = Storage.roster().filter(p => players.includes(p) || p === player || state().games.some(g => g.players.includes(p)));
+    if (!roster.includes(player)) player = players[0];
     renderHistory();
     renderEvolution();
     renderCalendar();
 
-    $('#profile-players').innerHTML = players.map(p =>
-      `<button type="button" class="chip ${p === player ? 'on' : ''}" data-p="${esc(p)}">${esc(Stats.who(p))}</button>`).join('');
+    $('#profile-players').innerHTML = roster.map(p =>
+      `<button type="button" class="chip ${Storage.isGuest(p) ? 'guest-chip' : ''} ${p === player ? 'on' : ''}" data-p="${esc(p)}">${esc(Stats.who(p))}</button>`).join('');
 
     const pr = Stats.profile(games, players, player);
     const titles = Stats.champions(games, players, settings.seasonMode).filter(c => c.winners.includes(player));
@@ -320,5 +322,12 @@ const Profile = (() => {
       </li>`).join('') : '<li class="empty">Juega partidas con el modo 🎲 Partida (o guarda las habilidades al registrar) para ver qué habilidades dan más victorias.</li>';
   }
 
-  return { init, render };
+  // Desde Ajustes → Jugadores: abrir la ficha de alguien.
+  function showPlayer(name) {
+    player = name;
+    try { localStorage.setItem(KEY, player); } catch {}
+    setMode('player');
+  }
+
+  return { init, render, showPlayer };
 })();

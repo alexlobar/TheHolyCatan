@@ -1135,26 +1135,15 @@ body.mesa-on { overflow: hidden; }
 .mesa-kicker { text-align: center; font-size: clamp(1rem, 3.2vw, 1.6rem); font-weight: 700; color: var(--wheat); margin: 0 0 3vh; }
 .mesa-hint { text-align: center; font-size: .85rem; opacity: .55; margin: 2vh 0 0; }
 
-.mesa-tabs { display: flex; gap: 6px; padding: 4px; border-radius: 999px; background: rgba(255, 255, 255, .08); }
+.mesa-tabs { display: flex; gap: 4px; padding: 4px; border-radius: 18px; background: rgba(255, 255, 255, .08); }
 .mesa-tabs button {
-  flex: 1; min-height: 48px; border: 0; border-radius: 999px;
-  background: none; color: #f6ecd6; font: inherit; font-weight: 700; font-size: .95rem; cursor: pointer;
-  white-space: nowrap;
+  flex: 1; min-width: 0; min-height: 54px; border: 0; border-radius: 14px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  background: none; color: #f6ecd6; font: inherit; font-weight: 700; font-size: .78rem; cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.mesa-tabs .mt-ico { font-size: 1.35rem; line-height: 1; }
 .mesa-tabs button.on { background: var(--wheat); color: #2b2118; }
-
-/* Liga */
-.mesa-rank { list-style: none; padding: 0; margin: 0; display: grid; gap: 1.6vh; }
-.mesa-rank li {
-  display: grid; grid-template-columns: 2.2ch 1fr auto; align-items: center; gap: 16px;
-  padding: 1.4vh 20px; border-radius: 16px;
-  background: rgba(255, 255, 255, .07);
-  font-size: clamp(1.4rem, 5.5vw, 3rem); font-weight: 700;
-}
-.mesa-rank li.first { background: rgba(232, 184, 74, .22); box-shadow: inset 0 0 0 2px var(--wheat); }
-.mesa-rank li.guest { opacity: .55; font-size: clamp(1rem, 3.6vw, 1.8rem); }
-.mr-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mr-wins { font-family: Georgia, "Times New Roman", serif; color: var(--wheat); }
 
 /* Marcador: botones grandes para tocar con el móvil en la mesa */
 .mesa-points { list-style: none; padding: 0; margin: 0; display: grid; gap: 1.6vh; }
@@ -1192,18 +1181,74 @@ body.mesa-on { overflow: hidden; }
 }
 .mesa-win .btn.primary { width: auto; }
 
-/* Holy Table de la partida */
-.mesa-abilities { list-style: none; padding: 0; margin: 0; display: grid; gap: 1.2vh; }
-.mesa-abilities li {
-  padding: 1.2vh 14px; border-radius: 14px;
-  background: rgba(255, 255, 255, .07); border-left: 10px solid var(--slot);
-  font-size: clamp(.95rem, 2.8vw, 1.3rem);
+/* Holy Table de la partida: una carta grande por color */
+.mesa-abilities {
+  list-style: none; padding: 0; margin: 0;
+  display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
 }
-.ma-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.ma-head b { font-size: 1.2em; }
-.ma-color { font-size: .7em; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; padding: 2px 8px; border-radius: 999px; background: var(--slot); color: #fff; }
-.mesa-abilities p { margin: 4px 0 0; opacity: .85; }
-.mesa-abilities .pills { margin: 6px 0 0; }
+.ma-card {
+  border-radius: 18px; overflow: hidden;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--slot) 28%, #1b140e), #1b140e 70%);
+  border: 3px solid var(--slot);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .35);
+}
+/* La negra, negra de verdad y con borde claro para que se vea sobre el fondo oscuro */
+.ma-card.ma-black { border-color: #9a9a9a; background: linear-gradient(180deg, #0c0c0c, #1b140e 70%); }
+.ma-black .ma-band { background: #0c0c0c; }
+.ma-band {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;
+  padding: 10px 16px; background: var(--slot); color: #fff;
+  border-bottom: 2px solid rgba(255, 255, 255, .25);
+}
+.ma-color { font-size: clamp(.85rem, 2.6vw, 1.1rem); font-weight: 800; text-transform: uppercase; letter-spacing: 2px; }
+.ma-origin {
+  font-size: clamp(.75rem, 2.2vw, .95rem); font-weight: 700;
+  padding: 3px 10px; border-radius: 999px; background: rgba(0, 0, 0, .3);
+}
+.ma-body { padding: 14px 16px 18px; }
+.ma-name { margin: 0; font-size: clamp(1.5rem, 6vw, 2.4rem); line-height: 1.1; color: #fff; }
+.ma-pills { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; }
+.ma-pills .pill { font-size: clamp(.9rem, 2.8vw, 1.1rem); padding: 4px 12px; }
+.ma-desc { margin: 10px 0 0; font-size: clamp(1.05rem, 3.6vw, 1.45rem); line-height: 1.4; color: #f6ecd6; }
+
+/* Juegos: la lista y el juego abierto */
+.mesa-games { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.mesa-games button {
+  min-height: 72px; padding: 10px; border-radius: 16px;
+  border: 2px solid rgba(255, 255, 255, .15); background: rgba(255, 255, 255, .07);
+  color: #f6ecd6; font: inherit; font-size: 1.05rem; font-weight: 700; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+.mesa-games button:active { transform: scale(.96); }
+.mesa-game { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; gap: 10px; }
+.mg-back {
+  align-self: flex-start; min-height: 44px; padding: 0 16px; border-radius: 999px;
+  border: 0; background: rgba(255, 255, 255, .12); color: #fff; font: inherit; font-weight: 700; cursor: pointer;
+}
+.mg-slot { width: min(100%, 700px); margin: 0 auto; }
+.mg-slot .card { margin: 0; color: var(--ink); }
+
+/* Terminar partida */
+.mesa-finish { width: min(100%, 620px); margin: 0 auto; display: grid; gap: 14px; }
+.mesa-finish h3 { margin: 0; text-align: center; font-size: clamp(1.3rem, 5vw, 2rem); color: var(--wheat); }
+.mf-winners { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.mf-winners button {
+  min-height: 64px; padding: 10px 14px; border-radius: 16px;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  border: 2px solid rgba(255, 255, 255, .15); border-left: 8px solid var(--pc);
+  background: rgba(255, 255, 255, .07); color: #f6ecd6;
+  font: inherit; font-size: 1.15rem; font-weight: 700; cursor: pointer; text-align: left;
+}
+.mf-winners button span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mf-winners button b { font-size: 1.4rem; opacity: .8; }
+.mf-winners button.on { background: var(--wheat); border-color: var(--wheat); color: #2b2118; }
+.mf-warn { margin: 0; text-align: center; color: var(--wheat); }
+.mf-note { display: grid; gap: 6px; font-weight: 700; }
+.mf-note input {
+  min-height: 48px; padding: 0 14px; border-radius: 12px;
+  border: 2px solid rgba(255, 255, 255, .2); background: rgba(255, 255, 255, .08); color: #fff; font: inherit;
+}
+.mesa-finish .btn { width: 100%; }
 
 /* Por encima del modo mesa para que se vean los avisos */
 .toast { z-index: 80; }
@@ -1214,6 +1259,11 @@ body.mesa-on { overflow: hidden; }
 .live-btns .btn { flex: 1; }
 .players-list { list-style: none; padding: 0; margin: 0 0 12px; display: grid; gap: 6px; }
 .players-list li { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); }
-.players-list li > span { flex: 1; font-weight: 700; }
+.pl-open {
+  flex: 1; min-width: 0; min-height: 40px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center;
+  border: 0; background: none; padding: 0; color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+}
+.pl-open b::after { content: " ›"; color: var(--muted); }
+.pl-open small { color: var(--muted); }
 .players-list li.guest { border-style: dashed; }
 .players-list .icon-btn { min-width: 36px; min-height: 36px; }

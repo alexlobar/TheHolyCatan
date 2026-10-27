@@ -13,8 +13,8 @@ Adaptada a móvil y tablet. Los datos se guardan en el `localStorage` del navega
 
 ## Funciones
 - **🎲 Partida**: modo partida en curso. Eliges jugadores, se sortean las habilidades y empieza el cronómetro (con pausa), con las habilidades en juego a mano. **🏅 Marcador de puntos de victoria** (+/− por jugador, empieza en 2; al llegar a 10 avisa y deja marcado al ganador). Al acabar eliges ganador y la partida se guarda con habilidades, puntos y duración; resumen con puntos finales, logros nuevos, botón para compartir y **🔁 Revancha** (mismos jugadores, habilidades nuevas). Sobrevive a cerrar la app y mantiene la pantalla encendida.
-- **📺 Modo mesa**: pantalla completa para dejar el móvil o la tablet en la mesa. **Se abre solo al empezar la partida** (y con «📺 Modo mesa» en la partida o en el Tracker), con tres pestañas: **🏅 Marcador** (jugadores con botones − / + grandes; al llegar a 10 sale «🏁 Terminar partida»), **🎴 Holy Table** (las 5 habilidades de la partida con su descripción) y **🏆 Liga**. Arriba, cronómetro con pausa. Sin partida, solo la clasificación. Mantiene la pantalla encendida; ✕ vuelve a la app.
-- **👥 Invitados**: «＋ Invitado» al preparar la partida o en el registro rápido, o en *Ajustes → Jugadores* (nombre y emoji opcional; Fuachi viene ya añadido). Juegan, suman puntos y quedan en el historial y la clasificación marcados como invitados (sin medalla, cuchara ni títulos). La regla de los 3 fundadores sigue igual. Quitar un invitado de la lista no borra sus partidas.
+- **📺 Modo mesa**: pantalla completa para dejar el móvil o la tablet en la mesa. **Se abre solo al empezar la partida** (y con «📺 Modo mesa» en la partida), con cuatro pestañas: **🏅 Marcador** (jugadores con botones − / + grandes; al llegar a 10 sale «🏁 Terminar partida»), **🎴 Holy Table** (las 5 habilidades como cartas grandes con su color), **🎮 Juegos** (los de «Mientras esperas» a pantalla completa; puedes ir al marcador y volver y el juego sigue donde lo dejaste) y **🏁 Terminar** (ganador, nota, guardar o cancelar; al guardar sale el resumen). Arriba, cronómetro con pausa. Mantiene la pantalla encendida; ✕ vuelve a la app.
+- **👥 Invitados**: «＋ Invitado» al preparar la partida o en el registro rápido, o en *Ajustes → Jugadores* (nombre y emoji opcional; Fuachi viene ya añadido). En *Ajustes → Jugadores*, al tocar a cualquiera (fundador o invitado) se abre su ficha en 📊 Stats; la lista muestra sus partidas y su título principal. Juegan, suman puntos y quedan en el historial y la clasificación marcados como invitados (sin medalla, cuchara ni títulos). La regla de los 3 fundadores sigue igual. Quitar un invitado de la lista no borra sus partidas.
 - **📅 Calendario** (📊 Stats): mes a mes, cada día coloreado según las partidas jugadas; al tocar un día salen sus partidas. Con días jugados y día de la semana favorito.
 - **🏅 Estadísticas de puntos** (solo partidas jugadas con el marcador): media de puntos y veces que se quedó a uno en la ficha; récords de partida más ajustada y mayor paliza.
 - **🏆 Tracker**: clasificación por **temporada** (trimestral, anual o sin temporadas) con PJ, victorias en romanos, % y medallas 🥇🥈🥉🪵; **campeones** de cada temporada terminada; registro rápido (opcionalmente con las habilidades de la mesa); historial en fichas con duración, habilidades y botón **📤 compartir** (WhatsApp).
@@ -53,7 +53,7 @@ Abre `index.html` en el navegador (doble clic).
 Funciona sin conexión gracias a `sw.js` (estrategia red primero: con internet siempre carga la última versión).
 Si añades un archivo nuevo a la app, inclúyelo en la lista `ASSETS` de `sw.js`.
 
-**Versión**: al publicar cambios, sube la versión en los cuatro sitios (deben coincidir): `VERSION` en `js/app.js`, `CACHE` en `sw.js`, `data-build` en `index.html` y el `?v=` de cada `<script>`/`<link>` de `index.html`. El `?v=` evita que el móvil mezcle archivos nuevos y viejos (GitHub Pages deja cachearlos 10 min). La versión cargada se ve al final de *Ajustes*.
+**Versión**: al publicar cambios, sube la versión en los cuatro sitios (deben coincidir): `VERSION` en `js/app.js`, `CACHE` en `sw.js`, `data-build` en `index.html` y el `?v=` de cada `<script>`/`<link>` de `index.html`. El `?v=` evita que el móvil mezcle archivos nuevos y viejos (GitHub Pages deja cachearlos 10 min). La versión cargada se ve al final de *Ajustes*, con lo que ocupa la app (archivos de `ASSETS` en `sw.js`) y los datos guardados, en KB.
 
 **Si algo falla**: la app no se bloquea. Cada parte arranca por separado y, si una falla, sale arriba un aviso rojo con el error y el botón **📋 Copiar error** para pasarlo. Si los datos guardados no se pueden leer, se hace antes una copia de rescate en `localStorage` (`catan-app-v1-rescate-…`).
 
@@ -75,7 +75,7 @@ js/fun.js         Mientras esperas (8 juegos)
 js/backup.js      copias automáticas y copia fuera del móvil
 js/imagen.js      imagen de la clasificación
 js/wrapped.js     Wrapped de la temporada
-js/mesa.js        modo mesa (marcador táctil, Holy Table de la partida y clasificación)
+js/mesa.js        modo mesa (marcador táctil, Holy Table de la partida, juegos y terminar partida)
 js/tracker.js     clasificación, campeones, registro rápido e historial
 js/tables.js      Holy Table (mazos, tablas propias y mesa de 5 colores)
 js/game.js        modo partida: cronómetro, puntos de victoria y revancha

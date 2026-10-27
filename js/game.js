@@ -20,7 +20,7 @@ const Game = (() => {
     $('#game-start').addEventListener('click', start);
     $('#setup-redraw-now').addEventListener('click', () => { Tables.newGame(); renderSetup(); });
     $('#game-pause').addEventListener('click', togglePause);
-    $('#game-finish').addEventListener('click', finish);
+    $('#game-finish').addEventListener('click', () => finish());
     $('#game-cancel').addEventListener('click', cancel);
     $('#summary-share').addEventListener('click', () => summary && Tracker.shareGame(summary.gameId));
     $('#summary-photo').addEventListener('click', () => summary && Photos.pick(summary.gameId));
@@ -166,11 +166,10 @@ const Game = (() => {
     renderPoints();
   }
 
-  // Desde el modo mesa: cerrar y bajar a «Terminar partida» con el ganador ya marcado.
-  function goFinish() {
-    App.show('game');
-    render();
-    $('#game-finish').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // Ganador elegido desde el modo mesa.
+  function setWinner(p) {
+    finishWinner = p;
+    renderWinner();
   }
 
   function renderPoints() {
@@ -231,15 +230,16 @@ const Game = (() => {
 
   // ---------- Terminar ----------
 
-  function finish() {
+  // La nota llega desde el modo mesa; si no, se coge la del formulario. Devuelve true si se guardó.
+  function finish(note = $('#finish-note').value) {
     const c = cur();
-    if (!finishWinner) return App.toast('Elige quién ha ganado');
+    if (!finishWinner) { App.toast('Elige quién ha ganado'); return false; }
     const game = {
       id: Storage.uid(),
       date: c.date,
       players: c.players,
       winner: finishWinner,
-      note: $('#finish-note').value.trim(),
+      note: note.trim(),
       abilities: c.abilities.map(a => ({ color: a.color, deck: a.deck, name: a.name })),
       duration: Math.round(elapsed(c) / 1000),
     };
@@ -257,16 +257,18 @@ const Game = (() => {
     summary = { gameId: game.id, unlocked };
     render();
     window.scrollTo(0, 0);
+    return true;
   }
 
   function cancel() {
-    if (!confirm('¿Cancelar la partida en curso? No se guardará.')) return;
+    if (!confirm('¿Cancelar la partida en curso? No se guardará.')) return false;
     state().current = null;
     finishWinner = null;
     clearInterval(tick);
     releaseAwake();
     Storage.save();
     render();
+    return true;
   }
 
   function renderSummary() {
@@ -309,5 +311,5 @@ const Game = (() => {
     }
   }
 
-  return { init, render, addPoint, togglePause, goFinish, clock: () => (cur() ? clock(elapsed(cur())) : ''), winner: () => finishWinner, GOAL, START_POINTS };
+  return { init, render, addPoint, togglePause, setWinner, finish, cancel, clock: () => (cur() ? clock(elapsed(cur())) : ''), winner: () => finishWinner, GOAL, START_POINTS };
 })();

@@ -1,7 +1,7 @@
 // Arranque, navegación por pestañas, ajustes y utilidades comunes.
 const App = (() => {
   // Debe coincidir con CACHE en sw.js y data-build en index.html.
-  const VERSION = '1.10.0';
+  const VERSION = '1.11.0';
   const BANNER_KEY = 'catan-install-banner-closed';
   const $ = sel => document.querySelector(sel);
   let toastTimer;
@@ -238,6 +238,7 @@ const App = (() => {
     window.scrollTo(0, 0);
     if (view !== 'fun') safe('Mientras esperas', () => Fun.leave()); // para los juegos con reloj (Loly, ¿Te llega?, Simón)
     refresh(); // por si otra pestaña cambió datos (p. ej. una mesa nueva en la Holy Table)
+    if (view === 'settings') renderSize().catch(e => console.warn('Tamaño', e));
   }
 
   function initTabs() {
@@ -331,6 +332,11 @@ const App = (() => {
     });
     $('#guest-add').addEventListener('click', () => addGuest());
     $('#players-list').addEventListener('click', e => {
+      const f = e.target.closest('[data-ficha]');
+      if (f) {
+        Profile.showPlayer(f.dataset.ficha);
+        return show('stats');
+      }
       const b = e.target.closest('[data-remove]');
       if (!b) return;
       const s = Storage.get();
@@ -349,14 +355,50 @@ const App = (() => {
     });
   }
 
+  // Cada jugador con su título principal; al tocarlo se abre su ficha en 📊 Stats.
   function renderPlayers() {
     const s = Storage.get();
+    const { esc } = Stats;
     const played = name => s.games.filter(g => g.players.includes(name)).length;
+    const games = n => `${played(n)} ${played(n) === 1 ? 'partida' : 'partidas'}`;
+    const titles = Stats.titles(Stats.valid(s.games), s.players, s.settings.seasonMode).byPlayer;
+    const open = (name, sub) => `<button type="button" class="pl-open" data-ficha="${esc(name)}"><b>${esc(Stats.who(name))}</b><small>${sub}</small></button>`;
     $('#players-list').innerHTML = [
-      ...s.players.map(p => `<li><span>${Stats.esc(Stats.who(p))}</span><small class="muted">fundador</small></li>`),
-      ...s.guests.map(g => `<li class="guest"><span>${Stats.esc(Stats.who(g.name))}</span><small class="muted">invitado · ${played(g.name)} ${played(g.name) === 1 ? 'partida' : 'partidas'}</small>
-        <button type="button" class="icon-btn" data-remove="${Stats.esc(g.name)}" aria-label="Quitar a ${Stats.esc(g.name)} de los invitados">✕</button></li>`),
+      ...s.players.map(p => {
+        const t = titles[p]?.[0];
+        return `<li>${open(p, `fundador · ${games(p)}${t ? ` · ${t.icon} ${esc(t.name)}` : ''}`)}</li>`;
+      }),
+      ...s.guests.map(g => `<li class="guest">${open(g.name, `invitado · ${games(g.name)}`)}
+        <button type="button" class="icon-btn" data-remove="${esc(g.name)}" aria-label="Quitar a ${esc(g.name)} de los invitados">✕</button></li>`),
     ].join('');
+  }
+
+  // Tamaño en Ajustes: archivos de la app (la lista de sw.js) y datos guardados (sin las fotos).
+  let appBytes = null;
+  async function renderSize() {
+    const kb = n => n >= 1024 * 1024
+      ? `${(n / 1024 / 1024).toLocaleString('es-ES', { maximumFractionDigits: 1 })} MB`
+      : `${Math.max(1, Math.round(n / 1024)).toLocaleString('es-ES')} KB`;
+    let data = 0;
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k.startsWith('catan')) data += new Blob([k, localStorage.getItem(k)]).size;
+      }
+    } catch {}
+    if (appBytes === null && location.protocol !== 'file:') {
+      try {
+        const sw = await (await fetch('./sw.js')).text();
+        const files = ['./sw.js', ...(sw.match(/'\.\/[^']+'/g) || []).map(f => f.slice(1, -1))];
+        const sizes = await Promise.all(files.map(f => fetch(f).then(r => (r.ok ? r.blob() : null)).then(b => b?.size || 0).catch(() => 0)));
+        appBytes = sizes.reduce((a, b) => a + b, 0) || null;
+      } catch {}
+    }
+    $('#app-size').textContent = [
+      appBytes && `📦 App ${kb(appBytes)}`,
+      `💾 Datos ${kb(data)}`,
+      appBytes && `Total ${kb(appBytes + data)}`,
+    ].filter(Boolean).join(' · ');
   }
 
   function toast(msg) {
