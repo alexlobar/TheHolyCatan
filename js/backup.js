@@ -1,6 +1,6 @@
 // 📦 Copias de seguridad.
 //  · Automáticas (en el móvil, IndexedDB): al guardar/editar/borrar partidas, antes de importar
-//    o restaurar, y una vez al día al abrir la app. Se guardan las 15 últimas y se pueden restaurar.
+//    o restaurar, y una vez al día al abrir la app. Solo se guardan las 2 últimas y se pueden restaurar.
 //  · Fuera del móvil: archivo JSON compartido (Drive, WhatsApp, correo…) o descargado. Cada
 //    10 partidas nuevas sin copia, la app lo recuerda (si se borran los datos del navegador,
 //    las copias internas también se pierden: la buena es la de fuera).
@@ -8,7 +8,7 @@ const Backup = (() => {
   const $ = sel => document.querySelector(sel);
   const DB = 'catan-backups';
   const STORE = 'snaps';
-  const MAX = 15;
+  const MAX = 2; // solo las 2 últimas: para deshacer un error reciente (la copia buena es la de fuera)
   const REMIND_EVERY = 10;
   const DAY = 24 * 3600 * 1000;
   let dbp = null;
@@ -45,11 +45,16 @@ const Backup = (() => {
       const all = await list();
       if (all[0] && all[0].data === data) return;
       await run('readwrite', st => st.put({ at: Date.now(), reason, games: s.games.length, data }));
-      for (const old of (await list()).slice(MAX)) await run('readwrite', st => st.delete(old.at));
+      await prune();
       renderSettings();
     } catch (e) {
       console.warn('Copia automática no guardada', e);
     }
+  }
+
+  // Borra las que sobran (también las que quedaron de cuando se guardaban 15).
+  async function prune() {
+    for (const old of (await list()).slice(MAX)) await run('readwrite', st => st.delete(old.at));
   }
 
   async function restore(at) {
@@ -137,7 +142,7 @@ const Backup = (() => {
     try { snaps = await list(); } catch {}
     $('#snapshots').innerHTML = snaps.length ? snaps.map(s => `
       <li>
-        <div><b>${fmt(s.at)}</b><small>${Stats.esc(s.reason)} · ${s.games} partidas</small></div>
+        <div><b>${fmt(s.at)}</b><small>${Stats.esc(s.reason)} · ${s.games} ${s.games === 1 ? 'partida' : 'partidas'}</small></div>
         <button type="button" class="btn small-btn" data-at="${s.at}">↺ Restaurar</button>
       </li>`).join('') : '<li class="empty">Todavía no hay copias automáticas.</li>';
   }
@@ -151,9 +156,11 @@ const Backup = (() => {
       if (b) restore(+b.dataset.at);
     });
     renderReminder();
-    renderSettings();
-    // Una copia al día al abrir la app.
-    list().then(all => { if (!all.length || Date.now() - all[0].at > DAY) snapshot('Copia diaria'); }).catch(() => {});
+    // Una copia al día al abrir la app (si los datos han cambiado).
+    prune().then(list).then(all => {
+      renderSettings();
+      if (!all.length || Date.now() - all[0].at > DAY) snapshot('Copia diaria');
+    }).catch(() => renderSettings());
   }
 
   return { init, snapshot, gameAdded, exportFile, renderSettings, renderReminder };
