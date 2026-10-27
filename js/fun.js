@@ -7,6 +7,9 @@
 //  · Simón de recursos: repite la secuencia, cada vez más larga.
 //  · ¿Te llega?: ¿con esa mano puedes construir eso? Sí/No contra el reloj.
 //  · Tragaperras del puerto: 3 rodillos de recursos con premios.
+//  · Matemáticas contra el reloj: Cálculo rápido, Verdadero o falso, ¿Qué signo falta? y Series.
+//  · Reflejos: toca en cuanto se ponga verde.
+//  · Ahorcado de Catán: palabras del juego.
 const Fun = (() => {
   const $ = sel => document.querySelector(sel);
   const { esc } = Stats;
@@ -25,7 +28,8 @@ const Fun = (() => {
   };
 
   // memory: menos movimientos = mejor (0 = sin récord) · coins: récord de monedas en la tragaperras
-  let best = { sheep: 0, memory: 0, hilo: 0, simon: 0, build: 0, coins: 0 };
+  // reflex: media en ms, menos = mejor (0 = sin récord)
+  let best = { sheep: 0, memory: 0, hilo: 0, simon: 0, build: 0, coins: 0, calc: 0, tf: 0, sign: 0, seq: 0, reflex: 0, hang: 0 };
   function loadBest() { try { best = { ...best, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; } catch {} }
   function saveBest() { try { localStorage.setItem(KEY, JSON.stringify(best)); } catch {} }
 
@@ -33,7 +37,8 @@ const Fun = (() => {
   function init() {
     loadBest();
     for (const [name, fn] of [['Loly', initSheep], ['parejas', initMemory], ['tableros', initBoard], ['ruleta', initWheel],
-      ['mayor o menor', initHilo], ['simón', initSimon], ['¿te llega?', initBuild], ['tragaperras', initSlots]]) {
+      ['mayor o menor', initHilo], ['simón', initSimon], ['¿te llega?', initBuild], ['tragaperras', initSlots],
+      ['matemáticas', initMath], ['reflejos', initReflex], ['ahorcado', initHang]]) {
       try { fn(); } catch (e) { console.error(`Juego ${name}`, e); }
     }
     // Atajos arriba para saltar a cada juego.
@@ -57,6 +62,8 @@ const Fun = (() => {
   function leave() {
     if (sheep.running) endSheep(true);
     if (build.running) endBuild(true);
+    Object.values(quizzes).forEach(st => endQuiz(st, true));
+    stopReflex();
     if (simon.playing) {
       simon.busy = false;
       simon.playing = false;
@@ -594,6 +601,297 @@ const Fun = (() => {
       setTimeout(tickFn, 60 + (i / steps) ** 3 * 380); // cada vez más lento
     };
     tickFn();
+  }
+
+  // ---------- 🧮 Juegos de matemáticas (contra el reloj) ----------
+  // Los cuatro comparten motor: pregunta → respuesta; acertar suma 1, fallar quita 3 segundos.
+  // Cada vez más difíciles según los aciertos.
+
+  const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+  const OPS = {
+    '+': (a, b) => a + b,
+    '−': (a, b) => a - b,
+    '×': (a, b) => a * b,
+    '÷': (a, b) => (b && a % b === 0 ? a / b : NaN),
+  };
+
+  // Una operación con resultado entero y no negativo; más grande y con más signos según el nivel.
+  function operation(level, ops = level < 4 ? ['+', '−'] : level < 8 ? ['+', '−', '×'] : ['+', '−', '×', '÷']) {
+    const op = randomItem(ops);
+    const big = Math.min(99, 10 + level * 5);
+    let a, b;
+    if (op === '+') { a = rnd(2, big); b = rnd(2, big); }
+    if (op === '−') { a = rnd(5, big); b = rnd(1, a); }
+    if (op === '×') { a = rnd(2, Math.min(12, 5 + (level >> 1))); b = rnd(2, 10); }
+    if (op === '÷') { b = rnd(2, 10); a = b * rnd(2, 10); }
+    return { a, b, op, r: OPS[op](a, b) };
+  }
+
+  const MATH = {
+    // Cálculo rápido: se escribe el resultado con el teclado; al poner todas las cifras se corrige solo.
+    calc: {
+      secs: 30, keypad: true,
+      gen(level) {
+        const { a, b, op, r } = operation(level);
+        return { q: `${a} ${op} ${b} = ?`, answer: String(r) };
+      },
+    },
+    // Verdadero o falso: la mitad de las veces el resultado está cambiado por poco.
+    tf: {
+      secs: 30,
+      gen(level) {
+        const { a, b, op, r } = operation(level);
+        const lie = Math.random() < 0.5;
+        const shown = lie ? Math.max(0, r + randomItem(op === '×' ? [-a, a, -1, 1, 10] : [-10, -2, -1, 1, 2, 10])) : r;
+        return {
+          q: `${a} ${op} ${b} = ${shown}`,
+          answer: shown === r ? 'si' : 'no',
+          options: [['no', '✘ Falso'], ['si', '✔ Verdadero']],
+        };
+      },
+    },
+    // ¿Qué signo falta? Solo se pregunta si un único signo da el resultado.
+    sign: {
+      secs: 30,
+      gen(level) {
+        for (;;) {
+          const { a, b, op, r } = operation(level + 8); // siempre con los cuatro signos
+          const fits = Object.keys(OPS).filter(o => OPS[o](a, b) === r);
+          if (fits.length === 1) return { q: `${a} ▢ ${b} = ${r}`, answer: op, options: Object.keys(OPS).map(o => [o, o]) };
+        }
+      },
+    },
+    // Series: ¿qué número sigue?
+    seq: {
+      secs: 60,
+      gen(level) {
+        const kinds = ['add', 'add', 'mul', 'alt', ...(level >= 3 ? ['sq', 'fib'] : [])];
+        const kind = randomItem(kinds);
+        let s;
+        if (kind === 'add') { const d = rnd(2, 4 + level) * (Math.random() < 0.3 ? -1 : 1); const a = d < 0 ? rnd(40, 80) : rnd(1, 20); s = [0, 1, 2, 3, 4].map(i => a + i * d); }
+        if (kind === 'mul') { const k = randomItem([2, 2, 3]); const a = rnd(1, 5); s = [0, 1, 2, 3, 4].map(i => a * k ** i); }
+        if (kind === 'alt') { const x = rnd(3, 9), y = rnd(1, x - 1); s = [rnd(1, 15)]; for (let i = 1; i < 5; i++) s.push(s[i - 1] + (i % 2 ? x : -y)); }
+        if (kind === 'sq') { const n = rnd(1, 6); s = [0, 1, 2, 3, 4].map(i => (n + i) ** 2); }
+        if (kind === 'fib') { s = [rnd(1, 5), rnd(1, 5)]; while (s.length < 5) s.push(s.at(-1) + s.at(-2)); }
+        const answer = s[4];
+        const opts = new Set([answer]);
+        for (const d of shuffle([1, -1, 2, -2, 3, -3, 5, 10, -10])) if (opts.size < 4 && answer + d >= 0) opts.add(answer + d);
+        return { q: `${s.slice(0, 4).join(', ')}, ?`, answer: String(answer), options: shuffle([...opts]).map(n => [String(n), String(n)]) };
+      },
+    },
+  };
+  const quizzes = {}; // estado de cada juego de matemáticas
+
+  function initMath() {
+    for (const [id, cfg] of Object.entries(MATH)) {
+      const card = document.getElementById(`g-${id}`);
+      const st = quizzes[id] = { cfg, card, running: false, score: 0, end: 0, timer: null, cur: null, typed: '' };
+      const q = sel => card.querySelector(sel);
+      if (cfg.keypad) {
+        q('.q-opts').classList.add('q-keypad');
+        q('.q-opts').innerHTML = ['7', '8', '9', '4', '5', '6', '1', '2', '3', 'C', '0', '⌫'].map(k =>
+          `<button type="button" class="q-key" data-v="${k}">${k}</button>`).join('');
+      }
+      q('.q-start').addEventListener('click', () => startQuiz(st));
+      q('.q-opts').addEventListener('click', e => {
+        const b = e.target.closest('[data-v]');
+        if (!b || !st.running) return;
+        cfg.keypad ? typeQuiz(st, b.dataset.v) : answerQuiz(st, b.dataset.v);
+      });
+      renderQuiz(st);
+    }
+  }
+
+  function renderQuiz(st, msg = '', cls = '') {
+    const q = sel => st.card.querySelector(sel);
+    const id = Object.keys(quizzes).find(k => quizzes[k] === st);
+    q('.q-play').hidden = !st.running;
+    q('.q-start').hidden = st.running;
+    q('.q-score').innerHTML = `Aciertos <b>${st.score}</b> · Récord <b>${best[id]}</b>`;
+    q('.q-msg').textContent = msg;
+    q('.q-msg').className = `game-result q-msg ${cls}`;
+    if (!st.running || !st.cur) return;
+    q('.q-question').textContent = st.cfg.keypad ? st.cur.q.replace('?', st.typed || '?') : st.cur.q;
+    if (!st.cfg.keypad) {
+      q('.q-opts').innerHTML = st.cur.options.map(([v, label]) =>
+        `<button type="button" class="btn big" data-v="${esc(v)}">${esc(label)}</button>`).join('');
+    }
+  }
+
+  function startQuiz(st) {
+    st.running = true;
+    st.score = 0;
+    st.typed = '';
+    st.end = Date.now() + st.cfg.secs * 1000;
+    st.cur = st.cfg.gen(0);
+    renderQuiz(st);
+    clearInterval(st.timer);
+    st.timer = setInterval(() => {
+      const left = Math.max(0, st.end - Date.now());
+      st.card.querySelector('.q-bar').style.width = `${(left / (st.cfg.secs * 1000)) * 100}%`;
+      if (!left) endQuiz(st);
+    }, 100);
+  }
+
+  function typeQuiz(st, k) {
+    if (k === 'C') st.typed = '';
+    else if (k === '⌫') st.typed = st.typed.slice(0, -1);
+    else st.typed += k;
+    // Al escribir tantas cifras como tiene el resultado, se corrige solo.
+    if (st.typed.length >= st.cur.answer.length) return answerQuiz(st, st.typed);
+    renderQuiz(st);
+  }
+
+  function answerQuiz(st, v) {
+    const ok = v === st.cur.answer;
+    const was = st.cur.q.replace('?', st.cur.answer);
+    if (ok) st.score++;
+    else { st.end -= 3000; navigator.vibrate?.(100); }
+    st.typed = '';
+    st.cur = st.cfg.gen(st.score);
+    renderQuiz(st, ok ? '✔' : st.cfg.keypad ? `✘ ${was} (−3 s)` : '✘ (−3 s)', ok ? 'ok' : 'bad');
+  }
+
+  function endQuiz(st, silent = false) {
+    if (!st.running) return;
+    st.running = false;
+    clearInterval(st.timer);
+    st.card.querySelector('.q-bar').style.width = '0%';
+    const id = Object.keys(quizzes).find(k => quizzes[k] === st);
+    const record = !silent && st.score > best[id];
+    if (record) { best[id] = st.score; saveBest(); }
+    st.card.querySelector('.q-start').textContent = '↺ Otra vez';
+    renderQuiz(st, silent ? '' : record ? `🏆 ¡Récord: ${st.score} aciertos!` : `${st.score} aciertos.`, record ? 'ok' : '');
+  }
+
+  // ---------- 🚦 Reflejos ----------
+  // Toca en cuanto se ponga verde. 5 intentos y sale la media en milisegundos.
+
+  const REFLEX_ROUNDS = 5;
+  const reflex = { state: 'idle', times: [], t0: 0, timer: null };
+
+  function initReflex() {
+    $('#reflex-pad').addEventListener('pointerdown', tapReflex);
+    renderReflex('Toca aquí para empezar');
+  }
+
+  function renderReflex(msg, cls = '') {
+    const pad = $('#reflex-pad');
+    pad.textContent = msg;
+    pad.className = `reflex-pad ${cls}`;
+    const done = reflex.times.length;
+    $('#reflex-score').innerHTML = `Intento <b>${Math.min(done + (reflex.state === 'done' ? 0 : 1), REFLEX_ROUNDS)}/${REFLEX_ROUNDS}</b> · Récord <b>${best.reflex ? `${best.reflex} ms` : '—'}</b>`;
+  }
+
+  function waitReflex() {
+    reflex.state = 'wait';
+    renderReflex('Espera al verde…', 'wait');
+    clearTimeout(reflex.timer);
+    reflex.timer = setTimeout(() => {
+      reflex.state = 'go';
+      reflex.t0 = performance.now();
+      renderReflex('¡YA!', 'go');
+    }, rnd(1200, 3800));
+  }
+
+  function tapReflex(e) {
+    e.preventDefault();
+    const s = reflex.state;
+    if (s === 'idle' || s === 'done') { reflex.times = []; return waitReflex(); }
+    if (s === 'early' || s === 'shown') return waitReflex();
+    if (s === 'wait') {
+      clearTimeout(reflex.timer);
+      reflex.state = 'early';
+      navigator.vibrate?.(120);
+      return renderReflex('¡Demasiado pronto! Toca para repetir', 'early');
+    }
+    // s === 'go'
+    const ms = Math.round(performance.now() - reflex.t0);
+    reflex.times.push(ms);
+    if (reflex.times.length < REFLEX_ROUNDS) {
+      reflex.state = 'shown';
+      return renderReflex(`${ms} ms · toca para el siguiente`);
+    }
+    reflex.state = 'done';
+    const avg = Math.round(reflex.times.reduce((a, b) => a + b, 0) / REFLEX_ROUNDS);
+    const record = !best.reflex || avg < best.reflex;
+    if (record) { best.reflex = avg; saveBest(); }
+    renderReflex(`${record ? '🏆 ¡Récord! ' : ''}Media: ${avg} ms · toca para otra`, record ? 'go' : '');
+  }
+
+  function stopReflex() {
+    if (reflex.state === 'idle' || reflex.state === 'done') return;
+    clearTimeout(reflex.timer);
+    reflex.state = 'idle';
+    reflex.times = [];
+    renderReflex('Toca aquí para empezar');
+  }
+
+  // ---------- 🔤 Ahorcado de Catán ----------
+
+  const WORDS = ['CARRETERA', 'POBLADO', 'CIUDAD', 'LADRON', 'PUERTO', 'CABALLERO', 'MONOPOLIO', 'DESIERTO',
+    'MADERA', 'BARRO', 'PIEDRA', 'PAJA', 'LOLY', 'OVEJA', 'HEXAGONO', 'DADOS', 'COLONOS', 'COMERCIO', 'BANCO',
+    'ISLA', 'CAMINO', 'VICTORIA', 'RECURSO', 'MERCADER', 'INVENTO', 'COSECHA', 'MARTIR', 'REVANCHA',
+    'CATEDRAL', 'BOSQUE', 'MONTAÑA', 'CANTERA', 'PRADERA', 'TRIGO', 'ARCILLA', 'FUNDADOR', 'EMPERADOR', 'CUCHARA'];
+  const LETTERS = 'ABCDEFGHIJKLMNÑOPQRSTUVWXYZ';
+  const LIVES = 6;
+  const hang = { word: '', guessed: new Set(), errors: 0, streak: 0, over: false };
+
+  function initHang() {
+    $('#hang-keys').innerHTML = [...LETTERS].map(l => `<button type="button" data-l="${l}">${l}</button>`).join('');
+    $('#hang-keys').addEventListener('click', e => {
+      const b = e.target.closest('[data-l]');
+      if (b) guessHang(b.dataset.l);
+    });
+    $('#hang-new').addEventListener('click', () => {
+      if (!hang.over && hang.guessed.size) hang.streak = 0; // cambiar a mitad de palabra rompe la racha
+      newHang();
+    });
+    newHang();
+  }
+
+  function newHang() {
+    const prev = hang.word;
+    do hang.word = randomItem(WORDS); while (hang.word === prev);
+    hang.guessed = new Set();
+    hang.errors = 0;
+    hang.over = false;
+    renderHang('Adivina la palabra de Catán.');
+  }
+
+  function guessHang(l) {
+    if (hang.over || hang.guessed.has(l)) return;
+    hang.guessed.add(l);
+    if (!hang.word.includes(l)) { hang.errors++; navigator.vibrate?.(60); }
+    if ([...hang.word].every(c => hang.guessed.has(c))) {
+      hang.over = true;
+      hang.streak++;
+      const record = hang.streak > best.hang;
+      if (record) { best.hang = hang.streak; saveBest(); }
+      return renderHang(`✔ ¡Acertada! Racha de ${hang.streak}${record ? ' · 🏆 ¡Récord!' : ''}`, 'ok');
+    }
+    if (hang.errors >= LIVES) {
+      hang.over = true;
+      hang.streak = 0;
+      return renderHang(`✘ Era ${hang.word}.`, 'bad');
+    }
+    renderHang(hang.word.includes(l) ? '✔' : `✘ No lleva ${l}`);
+  }
+
+  function renderHang(msg, cls = '') {
+    const show = c => hang.guessed.has(c) || (hang.over && hang.errors >= LIVES);
+    $('#hang-word').innerHTML = [...hang.word].map(c =>
+      `<span class="${hang.guessed.has(c) ? '' : show(c) ? 'missed' : 'blank'}">${show(c) ? c : ''}</span>`).join('');
+    $('#hang-lives').textContent = '❤️'.repeat(LIVES - hang.errors) + '🖤'.repeat(hang.errors);
+    $('#hang-score').innerHTML = `Racha <b>${hang.streak}</b> · Récord <b>${best.hang}</b>`;
+    $('#hang-msg').textContent = msg;
+    $('#hang-msg').className = `game-result ${cls}`;
+    $('#hang-keys').querySelectorAll('[data-l]').forEach(b => {
+      const l = b.dataset.l;
+      b.disabled = hang.over || hang.guessed.has(l);
+      b.className = hang.guessed.has(l) ? (hang.word.includes(l) ? 'hit' : 'miss') : '';
+    });
+    $('#hang-new').textContent = hang.over ? '▶ Otra palabra' : '↺ Cambiar palabra';
   }
 
   return { init, render, leave };

@@ -24,7 +24,7 @@ Adaptada a móvil y tablet. Los datos se guardan en el `localStorage` del navega
 - **📊 Evolución**: gráfico de victorias acumuladas por jugador (por temporada o histórico), con tooltip al tocar y vista de tabla. Colores fijos por jugador, validados con el script de la guía de visualización (claro y oscuro).
 - **📷 Fotos**: foto del tablero en cada partida (desde el resumen o el historial), visor a pantalla completa y se comparte junto al resumen. Se guardan comprimidas en IndexedDB **solo en ese dispositivo** (no van en la copia JSON).
 - **📜 Reglas de la casa** (botón de arriba): lista editable con buscador (sin tildes), reordenable, con **negrita** y *cursiva*.
-- **🎮 Mientras esperas** (botón de arriba o desde la partida), con atajos a cada juego: 🐑 Atrapa la oveja, 🎲 Mayor o menor (2 dados, con % de acierto), 🎵 Simón de recursos, ⚡ ¿Te llega? (mano vs. costes de construcción, 30 s), 🎰 Tragaperras del puerto, 🃏 Parejas de recursos, 🗺️ Generador de tableros y 🎯 Ruleta de la mesa. Récords por dispositivo.
+- **🎮 Mientras esperas** (botón de arriba o desde la partida), con atajos a cada juego: 🐑 Atrapa la oveja, 🎲 Mayor o menor (2 dados, con % de acierto), 🎵 Simón de recursos, ⚡ ¿Te llega? (mano vs. costes de construcción, 30 s), 🎰 Tragaperras del puerto, 🃏 Parejas de recursos, 🗺️ Generador de tableros, 🎯 Ruleta de la mesa, 🚦 Reflejos (media de 5 intentos en ms) y 🔤 Ahorcado de Catán. **Matemáticas contra el reloj** (acertar suma, fallar quita 3 s, cada vez más difícil): 🧮 Cálculo rápido (teclado numérico), ✅ Verdadero o falso, ➗ ¿Qué signo falta? y 🔢 Series. Récords por dispositivo.
 - **📦 Copias de seguridad** (`js/backup.js`): automáticas en el móvil (IndexedDB, las 15 últimas: al guardar/editar/borrar partidas, antes de importar o restaurar y una al día), restaurables desde Ajustes; y **fuera del móvil** con «📦 Guardar copia» (hoja de compartir → Drive, WhatsApp… o descarga). Cada 10 partidas sin copia fuera, aviso en el Tracker.
 - **↩ Deshacer** al borrar partidas, cartas y reglas (7 s); **✏️ Editar partidas** (fecha, jugadores, ganador, nota, duración).
 - **🔮 Predicción de campeón** del año en curso: ritmo de partidas → partidas que quedan → simulación (4000 veces) con la probabilidad de cada uno.
@@ -53,7 +53,9 @@ Abre `index.html` en el navegador (doble clic).
 Funciona sin conexión gracias a `sw.js` (estrategia red primero: con internet siempre carga la última versión).
 Si añades un archivo nuevo a la app, inclúyelo en la lista `ASSETS` de `sw.js`.
 
-**Versión**: al publicar cambios, sube la versión en los cuatro sitios (deben coincidir): `VERSION` en `js/app.js`, `CACHE` en `sw.js`, `data-build` en `index.html` y el `?v=` de cada `<script>`/`<link>` de `index.html`. El `?v=` evita que el móvil mezcle archivos nuevos y viejos (GitHub Pages deja cachearlos 10 min). La versión cargada se ve al final de *Ajustes*, con lo que ocupa la app (archivos de `ASSETS` en `sw.js`) y los datos guardados, en KB.
+**Versión**: al publicar cambios, sube la versión en los cuatro sitios (deben coincidir): `VERSION` (y `BUILD_DATE`, la fecha de publicación) en `js/app.js`, `CACHE` en `sw.js` (siempre `catan-vX.Y.Z`), `data-build` en `index.html` y el `?v=` de cada `<script>`/`<link>` de `index.html`. El `?v=` evita que el móvil mezcle archivos nuevos y viejos (GitHub Pages deja cachearlos 10 min).
+
+**Al final de *Ajustes*** (receta de `Plantillas/Version-y-espacio.md`): a la derecha, la versión que guarda la copia offline, su fecha y lo que ocupa todo (app + datos; al pasar el ratón, el desglose). Debajo de «Versión», los datos frente al tope de `localStorage` (5 MB por dominio, compartido con las demás apps de `usuario.github.io`: se avisa de lo que ocupan y del % desde el 1 %; naranja desde el 70 %, rojo desde el 90 %). Si la copia offline es de otra versión o aún no existe, sale una nota para resolverlo. Las fotos y copias automáticas van en IndexedDB y no cuentan en ese tope.
 
 **Si algo falla**: la app no se bloquea. Cada parte arranca por separado y, si una falla, sale arriba un aviso rojo con el error y el botón **📋 Copiar error** para pasarlo. Si los datos guardados no se pueden leer, se hace antes una copia de rescate en `localStorage` (`catan-app-v1-rescate-…`).
 
@@ -71,7 +73,7 @@ js/rules.js       reglas de la casa
 js/recursos.js    los 5 recursos de la casa (Paja, Madera, Loly, Piedra, Barro): nombres, cartas y logo de la app
 img/recursos/     imágenes de las cartas (recortes de las cartas del juego, uso personal del grupo)
 icons/logo.svg    logo sin fondo (barra superior); icon.svg e icons/*.png = icono de la app
-js/fun.js         Mientras esperas (8 juegos)
+js/fun.js         Mientras esperas (14 juegos)
 js/backup.js      copias automáticas y copia fuera del móvil
 js/imagen.js      imagen de la clasificación
 js/wrapped.js     Wrapped de la temporada

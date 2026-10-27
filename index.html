@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es" data-build="1.11.0">
+<html lang="es" data-build="1.12.1">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -16,7 +16,7 @@
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="icon" href="icons/favicon-32.png" type="image/png" sizes="32x32">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" sizes="180x180">
-  <link rel="stylesheet" href="css/styles.css?v=1.11.0">
+  <link rel="stylesheet" href="css/styles.css?v=1.12.1">
 </head>
 <body>
   <header class="topbar">
@@ -355,6 +355,12 @@
         <button type="button" data-go="g-memory">🃏 Parejas</button>
         <button type="button" data-go="g-board">🗺️ Tableros</button>
         <button type="button" data-go="g-wheel">🎯 Ruleta</button>
+        <button type="button" data-go="g-calc">🧮 Cálculo rápido</button>
+        <button type="button" data-go="g-tf">✅ Verdadero o falso</button>
+        <button type="button" data-go="g-sign">➗ ¿Qué signo?</button>
+        <button type="button" data-go="g-seq">🔢 Series</button>
+        <button type="button" data-go="g-reflex">🚦 Reflejos</button>
+        <button type="button" data-go="g-hang">🔤 Ahorcado</button>
       </nav>
 
       <div id="g-sheep" class="card">
@@ -459,6 +465,58 @@
         <button type="button" id="wheel-spin" class="btn primary">🎯 Girar</button>
         <p id="wheel-result" class="wheel-result" aria-live="polite"></p>
       </div>
+
+      <!-- Matemáticas: la misma estructura para los cuatro (la rellena fun.js) -->
+      <div id="g-calc" class="card quiz">
+        <div class="card-head"><h2>🧮 Cálculo rápido</h2><span class="muted q-score"></span></div>
+        <p class="muted">30 segundos de sumas y restas (luego multiplicaciones y divisiones). Escribe el resultado: al poner todas las cifras se corrige solo. Fallar quita 3 segundos.</p>
+        <div class="sheep-timer"><span class="q-bar"></span></div>
+        <div class="q-play" hidden><p class="q-question"></p><div class="q-opts"></div></div>
+        <p class="game-result q-msg" aria-live="polite"></p>
+        <button type="button" class="btn primary q-start">▶ Empezar</button>
+      </div>
+
+      <div id="g-tf" class="card quiz">
+        <div class="card-head"><h2>✅ Verdadero o falso</h2><span class="muted q-score"></span></div>
+        <p class="muted">30 segundos: ¿la cuenta está bien o mal? Fallar quita 3 segundos.</p>
+        <div class="sheep-timer"><span class="q-bar"></span></div>
+        <div class="q-play" hidden><p class="q-question"></p><div class="q-opts row"></div></div>
+        <p class="game-result q-msg" aria-live="polite"></p>
+        <button type="button" class="btn primary q-start">▶ Empezar</button>
+      </div>
+
+      <div id="g-sign" class="card quiz">
+        <div class="card-head"><h2>➗ ¿Qué signo falta?</h2><span class="muted q-score"></span></div>
+        <p class="muted">30 segundos: elige el signo que hace buena la cuenta. Fallar quita 3 segundos.</p>
+        <div class="sheep-timer"><span class="q-bar"></span></div>
+        <div class="q-play" hidden><p class="q-question"></p><div class="q-opts q-grid4"></div></div>
+        <p class="game-result q-msg" aria-live="polite"></p>
+        <button type="button" class="btn primary q-start">▶ Empezar</button>
+      </div>
+
+      <div id="g-seq" class="card quiz">
+        <div class="card-head"><h2>🔢 Series</h2><span class="muted q-score"></span></div>
+        <p class="muted">60 segundos: ¿qué número sigue? Sumas, multiplicaciones, saltos, cuadrados… Fallar quita 3 segundos.</p>
+        <div class="sheep-timer"><span class="q-bar"></span></div>
+        <div class="q-play" hidden><p class="q-question"></p><div class="q-opts q-grid2"></div></div>
+        <p class="game-result q-msg" aria-live="polite"></p>
+        <button type="button" class="btn primary q-start">▶ Empezar</button>
+      </div>
+
+      <div id="g-reflex" class="card">
+        <div class="card-head"><h2>🚦 Reflejos</h2><span id="reflex-score" class="muted"></span></div>
+        <p class="muted">Toca en cuanto se ponga verde. 5 intentos: cuenta la media en milisegundos.</p>
+        <button type="button" id="reflex-pad" class="reflex-pad"></button>
+      </div>
+
+      <div id="g-hang" class="card">
+        <div class="card-head"><h2>🔤 Ahorcado de Catán</h2><span id="hang-score" class="muted"></span></div>
+        <p id="hang-lives" class="hang-lives" aria-label="Vidas"></p>
+        <div id="hang-word" class="hang-word" aria-live="polite"></div>
+        <p id="hang-msg" class="game-result" aria-live="polite"></p>
+        <div id="hang-keys" class="hang-keys"></div>
+        <button type="button" id="hang-new" class="btn">↺ Cambiar palabra</button>
+      </div>
     </section>
 
     <!-- ============ AJUSTES ============ -->
@@ -510,8 +568,16 @@
         <button id="reset-games" class="btn danger">Borrar historial de partidas</button>
         <button id="reset-decks" class="btn danger">Restaurar tablas originales</button>
       </div>
-      <p class="version">Catán Tracker · versión <span id="app-version"></span></p>
-      <p id="app-size" class="version"></p>
+      <div class="build-info">
+        <div class="build-row">
+          <span class="build-left">
+            <span>Catán Tracker · Versión</span>
+            <span id="build-quota" class="build-quota"></span>
+          </span>
+          <span id="build-cache" class="build-cache">—</span>
+        </div>
+        <p id="build-hint" class="build-hint" hidden></p>
+      </div>
     </section>
   </main>
 
@@ -627,22 +693,22 @@
     </div>
   </div>
 
-  <script src="js/storage.js?v=1.11.0"></script>
-  <script src="js/stats.js?v=1.11.0"></script>
-  <script src="js/recursos.js?v=1.11.0"></script>
-  <script src="js/charts.js?v=1.11.0"></script>
-  <script src="js/photos.js?v=1.11.0"></script>
-  <script src="js/backup.js?v=1.11.0"></script>
-  <script src="js/imagen.js?v=1.11.0"></script>
-  <script src="js/tracker.js?v=1.11.0"></script>
-  <script src="js/tables.js?v=1.11.0"></script>
-  <script src="js/game.js?v=1.11.0"></script>
-  <script src="js/profile.js?v=1.11.0"></script>
-  <script src="js/rules.js?v=1.11.0"></script>
-  <script src="js/fun.js?v=1.11.0"></script>
-  <script src="js/wrapped.js?v=1.11.0"></script>
-  <script src="js/mesa.js?v=1.11.0"></script>
-  <script src="js/app.js?v=1.11.0"></script>
+  <script src="js/storage.js?v=1.12.1"></script>
+  <script src="js/stats.js?v=1.12.1"></script>
+  <script src="js/recursos.js?v=1.12.1"></script>
+  <script src="js/charts.js?v=1.12.1"></script>
+  <script src="js/photos.js?v=1.12.1"></script>
+  <script src="js/backup.js?v=1.12.1"></script>
+  <script src="js/imagen.js?v=1.12.1"></script>
+  <script src="js/tracker.js?v=1.12.1"></script>
+  <script src="js/tables.js?v=1.12.1"></script>
+  <script src="js/game.js?v=1.12.1"></script>
+  <script src="js/profile.js?v=1.12.1"></script>
+  <script src="js/rules.js?v=1.12.1"></script>
+  <script src="js/fun.js?v=1.12.1"></script>
+  <script src="js/wrapped.js?v=1.12.1"></script>
+  <script src="js/mesa.js?v=1.12.1"></script>
+  <script src="js/app.js?v=1.12.1"></script>
   <!-- Red de seguridad: si app.js no llega a cargar (archivo de otra versión, error de sintaxis,
        navegador antiguo), al menos las pestañas funcionan y se avisa del problema. -->
   <script>

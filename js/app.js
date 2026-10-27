@@ -1,7 +1,11 @@
 // Arranque, navegación por pestañas, ajustes y utilidades comunes.
 const App = (() => {
   // Debe coincidir con CACHE en sw.js y data-build en index.html.
-  const VERSION = '1.11.0';
+  const VERSION = '1.12.1';
+  const BUILD_DATE = '2026-10-27';
+  const CACHE_PREFIX = 'catan-v';        // igual que CACHE en sw.js, sin la versión
+  const DATA_PREFIX = 'catan';           // todas las claves de localStorage de esta app empiezan así
+  const STORAGE_MAX = 5 * 1024 * 1024;   // tope de localStorage por dominio
   const BANNER_KEY = 'catan-install-banner-closed';
   const $ = sel => document.querySelector(sel);
   let toastTimer;
@@ -181,7 +185,6 @@ const App = (() => {
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {
       navigator.serviceWorker.register('./sw.js').catch(e => console.warn('Service worker no registrado', e));
     }
-    $('#app-version').textContent = VERSION;
 
     document.querySelectorAll('.install-trigger').forEach(b => b.addEventListener('click', install));
     $('#install-banner .banner-close').addEventListener('click', () => {
@@ -238,7 +241,7 @@ const App = (() => {
     window.scrollTo(0, 0);
     if (view !== 'fun') safe('Mientras esperas', () => Fun.leave()); // para los juegos con reloj (Loly, ¿Te llega?, Simón)
     refresh(); // por si otra pestaña cambió datos (p. ej. una mesa nueva en la Holy Table)
-    if (view === 'settings') renderSize().catch(e => console.warn('Tamaño', e));
+    if (view === 'settings') safe('Versión', renderBuildInfo);
   }
 
   function initTabs() {
@@ -373,32 +376,96 @@ const App = (() => {
     ].join('');
   }
 
-  // Tamaño en Ajustes: archivos de la app (la lista de sw.js) y datos guardados (sin las fotos).
-  let appBytes = null;
-  async function renderSize() {
-    const kb = n => n >= 1024 * 1024
-      ? `${(n / 1024 / 1024).toLocaleString('es-ES', { maximumFractionDigits: 1 })} MB`
-      : `${Math.max(1, Math.round(n / 1024)).toLocaleString('es-ES')} KB`;
-    let data = 0;
+  // ---------- Versión, tamaño y espacio (final de Ajustes) ----------
+  // Derecha: versión guardada en la caché offline, su fecha y lo que ocupa todo (app + datos).
+  // Debajo: los datos frente al tope de localStorage (5 MB por dominio, compartido con las
+  // demás apps de usuario.github.io). Las fotos y copias automáticas van en IndexedDB y no cuentan.
+
+  const buildDate = () => BUILD_DATE.split('-').reverse().join('/');
+  const formatKB = bytes => {
+    const kb = bytes / 1024;
+    return `${kb.toLocaleString('es-ES', { maximumFractionDigits: kb < 10 ? 1 : 0 })} KB`;
+  };
+
+  // En caracteres (claves incluidas), que es como cuenta el navegador el tope.
+  function storageUse() {
+    let mine = 0, others = 0;
     try {
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
-        if (k.startsWith('catan')) data += new Blob([k, localStorage.getItem(k)]).size;
+        const size = k.length + (localStorage.getItem(k) || '').length;
+        if (k.startsWith(DATA_PREFIX)) mine += size;
+        else others += size;
       }
     } catch {}
-    if (appBytes === null && location.protocol !== 'file:') {
-      try {
-        const sw = await (await fetch('./sw.js')).text();
-        const files = ['./sw.js', ...(sw.match(/'\.\/[^']+'/g) || []).map(f => f.slice(1, -1))];
-        const sizes = await Promise.all(files.map(f => fetch(f).then(r => (r.ok ? r.blob() : null)).then(b => b?.size || 0).catch(() => 0)));
-        appBytes = sizes.reduce((a, b) => a + b, 0) || null;
-      } catch {}
+    return { mine, others, max: STORAGE_MAX };
+  }
+
+  const cacheBytes = name => caches.open(name)
+    .then(cache => cache.keys().then(reqs => Promise.all(reqs.map(req =>
+      cache.match(req).then(res => (res ? res.blob() : null)).then(b => (b ? b.size : 0))))))
+    .then(sizes => sizes.reduce((a, b) => a + b, 0));
+
+  function setHint(text) {
+    $('#build-hint').textContent = text;
+    $('#build-hint').hidden = !text;
+  }
+
+  function renderQuota(use) {
+    const quota = $('#build-quota');
+    const pct = (use.mine + use.others) / use.max * 100;
+    let text = `Datos: ${formatKB(use.mine)} de ${formatKB(use.max)} máx.`;
+    if (use.others >= 1024) text += ` · otras apps: ${formatKB(use.others)}`;
+    if (pct >= 1) text += ` (${Math.round(pct)} %)`;
+    quota.textContent = text;
+    quota.dataset.state = pct >= 90 ? 'full' : pct >= 70 ? 'high' : 'ok';
+    quota.title = 'El navegador guarda hasta 5 MB por sitio (las fotos van aparte).';
+  }
+
+  function renderBuildInfo() {
+    const cache = $('#build-cache');
+    const use = storageUse();
+    const data = use.mine;
+    renderQuota(use);
+
+    // La fecha solo se pone si la versión guardada es la del código: de una vieja no la sabemos.
+    const line = (version, appBytes) =>
+      `v${version}${version === VERSION ? ` · ${buildDate()}` : ''} · ${formatKB(appBytes + data)}`;
+
+    setHint('');
+    cache.dataset.state = 'plain';
+    cache.title = '';
+
+    // Se mira el protocolo y no isSecureContext: file:// cuenta como seguro pero su caché no se puede leer.
+    if (location.protocol === 'file:' || !window.caches) {
+      cache.textContent = line(VERSION, 0);
+      cache.title = 'Sin caché offline: solo cuentan tus datos';
+      return;
     }
-    $('#app-size').textContent = [
-      appBytes && `📦 App ${kb(appBytes)}`,
-      `💾 Datos ${kb(data)}`,
-      appBytes && `Total ${kb(appBytes + data)}`,
-    ].filter(Boolean).join(' · ');
+
+    const expected = CACHE_PREFIX + VERSION;
+    cache.textContent = 'Comprobando…';
+    caches.keys().then(keys => {
+      const mine = keys.filter(k => k.startsWith(CACHE_PREFIX));
+      if (!mine.length) {
+        cache.textContent = line(VERSION, 0);
+        setHint('Todavía no se ha guardado una copia offline.');
+        return null;
+      }
+      // Justo al actualizar pueden convivir dos: se enseña la nueva y se suman ambas.
+      const stale = !mine.includes(expected);
+      const name = stale ? mine[mine.length - 1] : expected;
+      return Promise.all(mine.map(cacheBytes)).then(sizes => {
+        const app = sizes.reduce((a, b) => a + b, 0);
+        cache.textContent = line(name.replace(CACHE_PREFIX, ''), app);
+        cache.title = `App ${formatKB(app)} + datos ${formatKB(data)}`;
+        cache.dataset.state = stale ? 'stale' : 'ok';
+        if (stale) setHint(`La copia offline no coincide con la v${VERSION}. Cierra la app del todo y ábrela otra vez para que se actualice.`);
+      });
+    }).catch(() => {
+      cache.textContent = line(VERSION, 0);
+      cache.title = 'No se pudo leer la caché: solo cuentan tus datos';
+    });
   }
 
   function toast(msg) {
