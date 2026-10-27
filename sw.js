@@ -2,7 +2,9 @@
 // Estrategia "red primero": con internet siempre se sirve la última versión publicada
 // (y se actualiza la copia); sin internet se usa la copia guardada.
 // Debe coincidir con VERSION en js/app.js y data-build en index.html: cambiarlo renueva la copia guardada.
-const CACHE = 'catan-v1.12.2';
+const CACHE = 'catan-v1.12.3';
+// Todas las apps de alexlobar.github.io comparten el almacén de cachés: al actualizar, sólo se borran las de esta app.
+const PREFIX = 'catan-v';
 const ASSETS = [
   './',
   './index.html',
@@ -44,7 +46,7 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(keys => Promise.all(keys.filter(k => k.startsWith(PREFIX) && k !== CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });

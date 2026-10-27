@@ -1075,6 +1075,7 @@ h2 .res-ico { height: 1.3em; vertical-align: -0.3em; }
 .build-cache[data-state="ok"] { color: var(--benefit-ink); }
 .build-cache[data-state="stale"], .build-quota[data-state="high"] { color: var(--brick); }
 .build-quota[data-state="full"] { color: var(--cost-ink); font-weight: 700; }
+.build-persist[data-state="risk"] { color: var(--brick); }
 .build-hint { margin: 6px 0 0; color: var(--brick); font-weight: 600; }
 
 .toast {

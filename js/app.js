@@ -1,7 +1,7 @@
 // Arranque, navegación por pestañas, ajustes y utilidades comunes.
 const App = (() => {
   // Debe coincidir con CACHE en sw.js y data-build en index.html.
-  const VERSION = '1.12.2';
+  const VERSION = '1.12.3';
   const BUILD_DATE = '2026-10-27';
   const CACHE_PREFIX = 'catan-v';        // igual que CACHE en sw.js, sin la versión
   const DATA_PREFIX = 'catan';           // todas las claves de localStorage de esta app empiezan así
@@ -24,6 +24,7 @@ const App = (() => {
     installPrompt = null;
     installed = true;
     renderInstall();
+    requestPersist(); // al instalarla es cuando Chrome suele conceder la protección
   });
 
   // ---------- Arranque a prueba de fallos ----------
@@ -68,6 +69,7 @@ const App = (() => {
     safe('Jugadores', initPlayers);
     safe('Jugadores', renderPlayers);
     safe('Instalar', initInstall);
+    safe('Protección de datos', requestPersist);
     safe('Pestaña inicial', openLastTab);
     safe('Aviso de error', initErrorBox);
   }
@@ -422,11 +424,38 @@ const App = (() => {
     quota.title = 'El navegador guarda hasta 5 MB por sitio (las fotos van aparte).';
   }
 
+  // Datos protegidos: sin esto el navegador puede borrarlos si le falta espacio (Safari, además,
+  // tras días sin abrir la web). Protege todo el dominio (también fotos y copias), pero no amplía los 5 MB.
+  function renderPersist() {
+    const el = $('#build-persist');
+    if (!el) return;
+    if (!navigator.storage || !navigator.storage.persisted) { el.hidden = true; return; }
+    navigator.storage.persisted().then(yes => {
+      el.hidden = false;
+      el.dataset.state = yes ? 'ok' : 'risk';
+      el.textContent = yes ? '🔒 Protegidos: el navegador no los borrará' : '⚠️ Sin proteger: el navegador podría borrarlos';
+      el.title = yes
+        ? 'El navegador los trata como persistentes: no los borra aunque le falte espacio.'
+        : 'Si le falta espacio (o, en Safari, tras días sin abrirla) podría borrarlos. Instalar la app y usarla a menudo suele bastar para que los proteja. Guarda copias fuera del móvil.';
+    }).catch(() => { el.hidden = true; });
+  }
+
+  // Se pide en cada arranque mientras no esté concedido: Chrome lo decide por uso e instalación,
+  // así que un «no» de hoy puede ser un «sí» mañana.
+  function requestPersist() {
+    if (!navigator.storage || !navigator.storage.persist) return;
+    navigator.storage.persisted()
+      .then(yes => yes || navigator.storage.persist())
+      .catch(() => {})
+      .then(renderPersist);
+  }
+
   function renderBuildInfo() {
     const cache = $('#build-cache');
     const use = storageUse();
     const data = use.mine;
     renderQuota(use);
+    renderPersist();
 
     // La fecha solo se pone si la versión guardada es la del código: de una vieja no la sabemos.
     const line = (version, appBytes) =>
