@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es" data-build="1.9.0">
+<html lang="es" data-build="1.10.0">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -16,7 +16,7 @@
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="icon" href="icons/favicon-32.png" type="image/png" sizes="32x32">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" sizes="180x180">
-  <link rel="stylesheet" href="css/styles.css?v=1.9.0">
+  <link rel="stylesheet" href="css/styles.css?v=1.10.0">
 </head>
 <body>
   <header class="topbar">
@@ -69,7 +69,10 @@
             <span id="live-players" class="muted"></span>
           </div>
           <div id="game-timer" class="timer">0:00:00</div>
-          <button type="button" id="game-pause" class="btn">⏸ Pausar</button>
+          <div class="row live-btns">
+            <button type="button" id="game-pause" class="btn">⏸ Pausar</button>
+            <button type="button" id="live-mesa" class="btn primary">📺 Modo mesa</button>
+          </div>
           <button type="button" id="live-bored" class="bored-btn">🥱 ¿Te aburres en el turno de otro? <b>🎮 Mientras esperas</b></button>
         </div>
 
@@ -477,6 +480,12 @@
         <p class="muted small-note">«Auto» sigue el modo del móvil.</p>
       </div>
       <div class="card">
+        <h2>👥 Jugadores</h2>
+        <p class="muted">Los 4 fundadores son fijos. Los invitados pueden jugar partidas; si los quitas de la lista, sus partidas se quedan en el historial.</p>
+        <ul id="players-list" class="players-list"></ul>
+        <button type="button" id="guest-add" class="btn">＋ Añadir invitado</button>
+      </div>
+      <div class="card">
         <h2>Temporadas</h2>
         <label class="field">La clasificación se reinicia
           <select id="season-mode"></select>
@@ -568,10 +577,30 @@
 
   <!-- Modo mesa: pantalla grande para dejar el móvil/tablet en la mesa -->
   <div id="mesa" class="mesa" role="dialog" aria-modal="true" aria-label="Modo mesa" hidden>
-    <button type="button" class="mesa-close" aria-label="Salir del modo mesa">✕</button>
+    <div class="mesa-top">
+      <span class="mesa-clock"></span>
+      <button type="button" class="mesa-pause" hidden></button>
+      <button type="button" class="mesa-close" aria-label="Salir del modo mesa">✕</button>
+    </div>
     <div class="mesa-stage"></div>
-    <div class="mesa-dots"></div>
+    <nav class="mesa-tabs" role="tablist" aria-label="Pantallas del modo mesa"></nav>
   </div>
+
+  <!-- Añadir invitado -->
+  <dialog id="guest-dialog" class="edit-dialog">
+    <form method="dialog">
+      <h2>＋ Nuevo invitado</h2>
+      <p class="muted small-note">Juega y queda en el historial, pero no es fundador: no lleva medalla ni títulos, y con menos de 3 fundadores la partida no cuenta para la liga.</p>
+      <div class="te-row">
+        <label class="field te-icon">Emoji <input type="text" id="guest-emoji" maxlength="4" placeholder="🙂"></label>
+        <label class="field">Nombre <input type="text" id="guest-name" maxlength="20" placeholder="Nombre" autocomplete="off"></label>
+      </div>
+      <div class="row">
+        <button type="button" class="btn" data-act="cancel">Cancelar</button>
+        <button type="submit" class="btn primary">＋ Añadir</button>
+      </div>
+    </form>
+  </dialog>
 
   <!-- Visor de fotos -->
   <dialog id="photo-viewer" class="photo-viewer">
@@ -595,22 +624,22 @@
     </div>
   </div>
 
-  <script src="js/storage.js?v=1.9.0"></script>
-  <script src="js/stats.js?v=1.9.0"></script>
-  <script src="js/recursos.js?v=1.9.0"></script>
-  <script src="js/charts.js?v=1.9.0"></script>
-  <script src="js/photos.js?v=1.9.0"></script>
-  <script src="js/backup.js?v=1.9.0"></script>
-  <script src="js/imagen.js?v=1.9.0"></script>
-  <script src="js/tracker.js?v=1.9.0"></script>
-  <script src="js/tables.js?v=1.9.0"></script>
-  <script src="js/game.js?v=1.9.0"></script>
-  <script src="js/profile.js?v=1.9.0"></script>
-  <script src="js/rules.js?v=1.9.0"></script>
-  <script src="js/fun.js?v=1.9.0"></script>
-  <script src="js/wrapped.js?v=1.9.0"></script>
-  <script src="js/mesa.js?v=1.9.0"></script>
-  <script src="js/app.js?v=1.9.0"></script>
+  <script src="js/storage.js?v=1.10.0"></script>
+  <script src="js/stats.js?v=1.10.0"></script>
+  <script src="js/recursos.js?v=1.10.0"></script>
+  <script src="js/charts.js?v=1.10.0"></script>
+  <script src="js/photos.js?v=1.10.0"></script>
+  <script src="js/backup.js?v=1.10.0"></script>
+  <script src="js/imagen.js?v=1.10.0"></script>
+  <script src="js/tracker.js?v=1.10.0"></script>
+  <script src="js/tables.js?v=1.10.0"></script>
+  <script src="js/game.js?v=1.10.0"></script>
+  <script src="js/profile.js?v=1.10.0"></script>
+  <script src="js/rules.js?v=1.10.0"></script>
+  <script src="js/fun.js?v=1.10.0"></script>
+  <script src="js/wrapped.js?v=1.10.0"></script>
+  <script src="js/mesa.js?v=1.10.0"></script>
+  <script src="js/app.js?v=1.10.0"></script>
   <!-- Red de seguridad: si app.js no llega a cargar (archivo de otra versión, error de sintaxis,
        navegador antiguo), al menos las pestañas funcionan y se avisa del problema. -->
   <script>

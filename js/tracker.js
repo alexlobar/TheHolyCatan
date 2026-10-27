@@ -31,15 +31,17 @@ const Tracker = (() => {
   }
 
   function renderChips() {
-    const players = state().players;
+    // Los de la casa + invitados (los invitados empiezan sin marcar).
+    const players = Storage.roster();
+    for (const p of selected) if (!players.includes(p)) selected.delete(p);
 
-    $('#participants').replaceChildren(...players.map(p => chip(who(p), selected.has(p), '', () => {
+    $('#participants').replaceChildren(...players.map(p => chip(who(p), selected.has(p), Storage.isGuest(p) ? 'guest-chip' : '', () => {
       selected.has(p) ? selected.delete(p) : selected.add(p);
       if (!selected.has(winner)) winner = null;
       renderChips();
-    })));
+    })), chip('＋ Invitado', false, 'add-guest', () => App.addGuest(name => { selected.add(name); renderChips(); })));
 
-    $('#winner').replaceChildren(...players.map(p => {
+    $('#winner').replaceChildren(...players.filter(p => selected.has(p) || !Storage.isGuest(p)).map(p => {
       const c = chip(who(p), winner === p, 'winner', () => { winner = p; renderChips(); });
       c.disabled = !selected.has(p);
       return c;
@@ -209,7 +211,7 @@ const Tracker = (() => {
 
   function renderEditChips() {
     // Jugadores de la app + los que tuviera la partida (por si alguno ya no está en la lista).
-    const all = [...new Set([...state().players, ...editing.players])];
+    const all = [...new Set([...Storage.roster(), ...editing.players])];
     $('#edit-players').innerHTML = all.map(p =>
       `<button type="button" class="chip small ${editing.players.has(p) ? 'on' : ''}" data-p="${esc(p)}">${esc(who(p))}</button>`).join('');
     $('#edit-winner').innerHTML = all.map(p =>

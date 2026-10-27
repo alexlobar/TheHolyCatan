@@ -92,7 +92,18 @@ const Stats = (() => {
   }
   const legacyTotal = (key, mode) => Object.values(legacyOf(key, mode)).reduce((a, b) => a + b, 0);
 
-  const who = name => (Storage.EMOJI[name] ? `${name} ${Storage.EMOJI[name]}` : name);
+  const who = name => {
+    const e = Storage.emojiOf(name);
+    return e ? `${name} ${e}` : name;
+  };
+  // Color de cada jugador en marcadores: los de la casa con su color fijo; invitados, otros.
+  const GUEST_COLORS = ['#9a6fd0', '#d0507a', '#4f9aa8', '#8a7a3c'];
+  function colorOf(name) {
+    const s = Storage.get();
+    const i = s.players.indexOf(name);
+    if (i >= 0) return `var(--p${(i % 4) + 1})`;
+    return GUEST_COLORS[Math.max(0, s.guests.findIndex(g => g.name === name)) % GUEST_COLORS.length];
+  }
   const pctText = r => (r.pct === null ? '—' : `${Math.round(r.pct * 100)}%`);
 
   // Medalla de una fila de clasificación: 🥇🥈🥉 al podio y 🪵 solo al último de los de la casa
@@ -119,7 +130,9 @@ const Stats = (() => {
      de la app; quien solo está ahí (Fuachi) aparece como invitado. PJ y % solo cuentan las
      partidas de la app (de WhatsApp no sabemos cuántas se jugaron): pct = null si no hay. */
   function ranking(games, players, extra = {}) {
-    const names = [...players, ...Object.keys(extra).filter(n => !players.includes(n) && extra[n] > 0)];
+    // Invitados: los de WhatsApp con victorias y los que han jugado partidas en la app.
+    const others = [...Object.keys(extra).filter(n => extra[n] > 0), ...games.flatMap(g => g.players)];
+    const names = [...players, ...new Set(others.filter(n => !players.includes(n)))];
     const stats = Object.fromEntries(names.map(p => [p, { played: 0, wins: 0 }]));
     for (const g of games) {
       for (const p of g.players) {
@@ -281,7 +294,7 @@ const Stats = (() => {
     const L = Storage.get()?.legacy || {};
     const yearOf = g => (g.date || '').slice(0, 4);
     const years = [...new Set([...Object.keys(L), ...games.map(yearOf).filter(Boolean)])].sort();
-    const guests = [...new Set(Object.values(L).flatMap(y => Object.keys(y)))].filter(n => !players.includes(n));
+    const guests = [...new Set([...Object.values(L).flatMap(y => Object.keys(y)), ...games.map(g => g.winner)])].filter(n => !players.includes(n));
     const names = [...players, ...guests];
 
     const byYear = years.map(year => {
@@ -698,7 +711,7 @@ const Stats = (() => {
   return {
     esc, rich, toRoman, MEDALS, medal, rowMedal, today, fmtDate, fmtMonth, fmtDuration, pct, pctText, joinNames, chrono, gameNumber,
     SEASON_MODES, seasonKey, seasonLabel, currentSeason, inSeason, seasons,
-    isValid, valid, foundersIn, legacyOf, legacyTotal, who,
+    isValid, valid, foundersIn, legacyOf, legacyTotal, who, colorOf,
     POINTS_GOAL, margin, pointsLine,
     ranking, seasonRanking, champions, profile, evolution, history, predict, legacyBaselines, streaks, records, TITLES, titles, wrapped, wrappedText,
     abilityStats, ACHIEVEMENTS, achievements, newAchievements, leagueText, shareText,

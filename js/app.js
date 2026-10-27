@@ -1,7 +1,7 @@
 // Arranque, navegación por pestañas, ajustes y utilidades comunes.
 const App = (() => {
   // Debe coincidir con CACHE en sw.js y data-build en index.html.
-  const VERSION = '1.9.0';
+  const VERSION = '1.10.0';
   const BANNER_KEY = 'catan-install-banner-closed';
   const $ = sel => document.querySelector(sel);
   let toastTimer;
@@ -61,6 +61,8 @@ const App = (() => {
     safe('Copias', () => Backup.init());
     safe('Deshacer', initUndo);
     safe('Ajustes', initSettings);
+    safe('Jugadores', initPlayers);
+    safe('Jugadores', renderPlayers);
     safe('Instalar', initInstall);
     safe('Pestaña inicial', openLastTab);
     safe('Aviso de error', initErrorBox);
@@ -120,6 +122,7 @@ const App = (() => {
     safe('Stats', () => Profile.render());
     safe('Reglas', () => Rules.render());
     safe('Mientras esperas', () => Fun.render());
+    safe('Jugadores', renderPlayers);
   }
 
   // Compartir texto (+ foto si la hay) con la hoja nativa del móvil (WhatsApp, Telegram…); si no hay, copiar.
@@ -290,12 +293,70 @@ const App = (() => {
     });
 
     $('#reset-decks').addEventListener('click', async () => {
-      if (confirm('¿Volver a las cartas originales de las 3 tablas? (Se guarda antes una copia automática.)')) {
+      if (confirm('¿Volver a las cartas originales de las tablas de la casa? Las tablas propias se borran. (Se guarda antes una copia automática.)')) {
         await Backup.snapshot('Antes de restaurar las tablas');
         Tables.reset();
         toast('Tablas restauradas');
       }
     });
+  }
+
+  // ---------- Jugadores e invitados ----------
+
+  let onGuestAdded = null;
+
+  // Abre el diálogo de nuevo invitado; al añadirlo llama a done(nombre) (p. ej. para marcarlo).
+  function addGuest(done = null) {
+    onGuestAdded = done;
+    $('#guest-name').value = '';
+    $('#guest-emoji').value = '';
+    $('#guest-dialog').showModal();
+    $('#guest-name').focus();
+  }
+
+  function initPlayers() {
+    const dlg = $('#guest-dialog');
+    dlg.querySelector('[data-act="cancel"]').addEventListener('click', () => dlg.close());
+    dlg.querySelector('form').addEventListener('submit', e => {
+      e.preventDefault();
+      const name = $('#guest-name').value.trim().replace(/\s+/g, ' ');
+      const err = Storage.addGuest(name, $('#guest-emoji').value);
+      if (err) return toast(err);
+      dlg.close();
+      toast(`👋 ${Stats.who(name)} añadido como invitado`);
+      const done = onGuestAdded;
+      onGuestAdded = null;
+      refresh();
+      if (done) safe('Invitado', () => done(name));
+    });
+    $('#guest-add').addEventListener('click', () => addGuest());
+    $('#players-list').addEventListener('click', e => {
+      const b = e.target.closest('[data-remove]');
+      if (!b) return;
+      const s = Storage.get();
+      const name = b.dataset.remove;
+      if (s.current?.players.includes(name)) return toast(`${name} está jugando la partida en curso`);
+      const i = s.guests.findIndex(g => g.name === name);
+      const guest = s.guests[i];
+      s.guests.splice(i, 1);
+      Storage.save();
+      refresh();
+      undo(`👋 ${name} quitado de los invitados`, () => {
+        s.guests.splice(i, 0, guest);
+        Storage.save();
+        refresh();
+      });
+    });
+  }
+
+  function renderPlayers() {
+    const s = Storage.get();
+    const played = name => s.games.filter(g => g.players.includes(name)).length;
+    $('#players-list').innerHTML = [
+      ...s.players.map(p => `<li><span>${Stats.esc(Stats.who(p))}</span><small class="muted">fundador</small></li>`),
+      ...s.guests.map(g => `<li class="guest"><span>${Stats.esc(Stats.who(g.name))}</span><small class="muted">invitado · ${played(g.name)} ${played(g.name) === 1 ? 'partida' : 'partidas'}</small>
+        <button type="button" class="icon-btn" data-remove="${Stats.esc(g.name)}" aria-label="Quitar a ${Stats.esc(g.name)} de los invitados">✕</button></li>`),
+    ].join('');
   }
 
   function toast(msg) {
@@ -307,5 +368,5 @@ const App = (() => {
   }
 
   document.addEventListener('DOMContentLoaded', init);
-  return { toast, refresh, share, show, undo };
+  return { toast, refresh, share, show, undo, addGuest };
 })();

@@ -26,6 +26,7 @@ const Game = (() => {
     $('#summary-photo').addEventListener('click', () => summary && Photos.pick(summary.gameId));
     $('#summary-thumb').addEventListener('click', () => summary && Photos.view(summary.gameId));
     $('#live-bored').addEventListener('click', () => App.show('fun'));
+    $('#live-mesa').addEventListener('click', () => Mesa.open());
     $('#summary-new').addEventListener('click', () => { summary = null; render(); });
     $('#summary-rematch').addEventListener('click', rematch);
     $('#live-points').addEventListener('click', e => {
@@ -85,13 +86,17 @@ const Game = (() => {
   // ---------- Preparar ----------
 
   function renderSetup() {
-    const players = state().players;
-    if (!setupPlayers) setupPlayers = new Set(players);
+    // Los de la casa (marcados de inicio) + invitados + botón para añadir uno nuevo.
+    const players = Storage.roster();
+    if (!setupPlayers) setupPlayers = new Set(state().players);
+    for (const p of setupPlayers) if (!players.includes(p)) setupPlayers.delete(p);
     $('#setup-players').innerHTML = players.map(p =>
-      `<button type="button" class="chip ${setupPlayers.has(p) ? 'on' : ''}" data-p="${esc(p)}">${esc(Stats.who(p))}</button>`).join('');
+      `<button type="button" class="chip ${Storage.isGuest(p) ? 'guest-chip' : ''} ${setupPlayers.has(p) ? 'on' : ''}" data-p="${esc(p)}">${esc(Stats.who(p))}</button>`).join('')
+      + '<button type="button" class="chip add-guest" data-add>＋ Invitado</button>';
     const founders = [...setupPlayers].filter(p => Storage.FOUNDERS.includes(p)).length;
     $('#setup-warning').hidden = founders >= Storage.MIN_FOUNDERS;
     $('#setup-players').querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => {
+      if (b.dataset.add !== undefined) return App.addGuest(name => { setupPlayers.add(name); renderSetup(); });
       const p = b.dataset.p;
       setupPlayers.has(p) ? setupPlayers.delete(p) : setupPlayers.add(p);
       renderSetup();
@@ -107,20 +112,22 @@ const Game = (() => {
   function start() {
     if (setupPlayers.size < 2) return App.toast('Selecciona al menos 2 jugadores');
     const redraw = !$('#setup-redraw-row').hidden && $('#setup-redraw').checked;
-    begin(state().players.filter(p => setupPlayers.has(p)), redraw);
+    begin(Storage.roster().filter(p => setupPlayers.has(p)), redraw);
     App.toast('▶ ¡Que empiece la partida!');
+    Mesa.open(); // marcador a pantalla completa para dejar el móvil en la mesa
   }
 
   // Revancha: mismos jugadores que la partida recién terminada y habilidades nuevas.
   function rematch() {
     const g = summary && state().games.find(x => x.id === summary.gameId);
     if (!g) return;
-    const players = g.players.filter(p => state().players.includes(p));
+    const players = g.players.filter(p => Storage.roster().includes(p));
     if (players.length < 2) return App.toast('Faltan jugadores para la revancha');
     setupPlayers = new Set(players);
     summary = null;
     begin(players, true);
     App.toast(`🔁 ¡Revancha! ${Stats.who(g.winner)} defiende la corona`);
+    Mesa.open();
   }
 
   function begin(players, redraw) {
@@ -151,12 +158,19 @@ const Game = (() => {
     c.points[p] = now;
     if (delta > 0 && now >= GOAL && before < GOAL) {
       finishWinner = p;
-      App.toast(`🏆 ¡${Stats.who(p)} llega a ${now}! Marcado como ganador abajo`);
+      if (!Mesa.isOpen()) App.toast(`🏆 ¡${Stats.who(p)} llega a ${now}! Marcado como ganador abajo`);
       navigator.vibrate?.([80, 60, 160]);
       renderWinner();
     }
     Storage.save();
     renderPoints();
+  }
+
+  // Desde el modo mesa: cerrar y bajar a «Terminar partida» con el ganador ya marcado.
+  function goFinish() {
+    App.show('game');
+    render();
+    $('#game-finish').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   function renderPoints() {
@@ -166,7 +180,7 @@ const Game = (() => {
       const pts = c.points[p] ?? START_POINTS;
       const cls = pts >= GOAL ? 'goal' : pts === GOAL - 1 ? 'near' : pts === max ? 'lead' : '';
       return `
-        <li class="${cls}" style="--pc:var(--p${(state().players.indexOf(p) % 4) + 1})">
+        <li class="${cls}" style="--pc:${Stats.colorOf(p)}">
           <span class="pb-name">${esc(Stats.who(p))}</span>
           <div class="pb-bar" aria-hidden="true"><span style="width:${Math.min(100, pts / GOAL * 100)}%"></span></div>
           <button type="button" class="pb-btn" data-p="${esc(p)}" data-d="-1" aria-label="Quitar un punto a ${esc(p)}">−</button>
@@ -269,7 +283,7 @@ const Game = (() => {
     $('#summary-points').hidden = !pts;
     $('#summary-points').innerHTML = pts ? [...g.players].sort((a, b) => (pts[b] ?? 0) - (pts[a] ?? 0)).map(p =>
       `<li class="${p === g.winner ? 'win' : ''}"><span>${esc(Stats.who(p))}</span><b>${pts[p] ?? '–'}</b></li>`).join('') : '';
-    $('#summary-rematch').hidden = g.players.filter(p => s.players.includes(p)).length < 2;
+    $('#summary-rematch').hidden = g.players.filter(p => Storage.roster().includes(p)).length < 2;
     $('#summary-photo').textContent = g.photo ? '📷 Cambiar foto' : '📷 Añadir foto del tablero';
     $('#summary-thumb').hidden = !g.photo;
     if (g.photo) Photos.url(g.id).then(u => { if (u) $('#summary-thumb img').src = u; }).catch(() => {});
@@ -295,5 +309,5 @@ const Game = (() => {
     }
   }
 
-  return { init, render };
+  return { init, render, addPoint, togglePause, goFinish, clock: () => (cur() ? clock(elapsed(cur())) : ''), winner: () => finishWinner, GOAL, START_POINTS };
 })();

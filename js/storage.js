@@ -199,9 +199,21 @@ const Storage = (() => {
     FOUNDERS_RULE,
   ].map(([title, text]) => ({ id: uid(), title, text }));
 
+  // Invitados: juegan y quedan en el historial, pero no son fundadores (sin medalla ni títulos).
+  const defaultGuests = () => [{ name: 'Fuachi', emoji: '' }];
+  function cleanGuests(list, players) {
+    const seen = new Set(players.map(p => p.toLowerCase()));
+    return (Array.isArray(list) ? list : [])
+      .map(g => (typeof g === 'string' ? { name: g } : g))
+      .filter(g => g && typeof g === 'object')
+      .map(g => ({ name: str(g.name).trim().slice(0, 20), emoji: str(g.emoji).trim().slice(0, 4) }))
+      .filter(g => g.name && !seen.has(g.name.toLowerCase()) && seen.add(g.name.toLowerCase()));
+  }
+
   const defaults = () => ({
-    version: 8,
+    version: 9,
     players: [...PLAYERS],
+    guests: defaultGuests(), // [{ name, emoji }]
     legacy: clone(LEGACY), // { [año]: { jugador: victorias } } de la liga de WhatsApp
     // { id, date, players, winner, note, abilities?: [{ color, deck, name }], duration?: segundos,
     //   points?: { jugador: puntos de victoria }, photo?: true (la foto vive en IndexedDB) }
@@ -223,6 +235,7 @@ const Storage = (() => {
   //  v5: `rounds` en las cartas, `settings` (temporadas) y `current` (partida en curso)
   //  v6: `rules` · v7: `legacy` (liga de WhatsApp), temporadas anuales y regla de fundadores
   //  v8: tablas nuevas (War, Fortune, Crown, Chaos), tablas propias y puntos de victoria.
+  //  v9: invitados (`guests`).
   const cleanPoints = p => {
     if (!p || typeof p !== 'object') return undefined;
     const out = {};
@@ -256,6 +269,7 @@ const Storage = (() => {
         points: cleanPoints(g.points),
       }));
     if (!Array.isArray(s.players) || !s.players.length) s.players = [...PLAYERS];
+    s.guests = cleanGuests(Array.isArray(data.guests) ? data.guests : defaultGuests(), s.players);
     s.rules = s.rules.filter(r => r && typeof r === 'object').map(r => ({ id: str(r.id) || uid(), title: str(r.title), text: str(r.text) }));
     if (s.current) {
       s.current.abilities = Array.isArray(s.current.abilities) ? s.current.abilities : [];
@@ -306,11 +320,26 @@ const Storage = (() => {
     for (const id of Object.keys(decks)) if (!TABLES.some(t => t.id === id)) delete decks[id];
     s.decks = decks;
     delete s.holy; delete s.cards; delete s.table;
-    s.version = 8;
+    s.version = 9;
     return s;
   }
 
   let state;
+
+  // Todos los que pueden jugar: los de la casa y después los invitados.
+  const roster = () => [...state.players, ...state.guests.map(g => g.name)];
+  const isGuest = name => !!state && !state.players.includes(name);
+  const emojiOf = name => EMOJI[name] || state?.guests.find(g => g.name === name)?.emoji || '';
+
+  // Añade un invitado. Devuelve un mensaje de error o null si ha ido bien.
+  function addGuest(name, emoji = '') {
+    const n = str(name).trim().replace(/\s+/g, ' ').slice(0, 20);
+    if (!n) return 'Escribe un nombre';
+    if (roster().some(p => p.toLowerCase() === n.toLowerCase())) return `${n} ya está en la lista`;
+    state.guests.push({ name: n, emoji: str(emoji).trim().slice(0, 4) });
+    save();
+    return null;
+  }
 
   function load() {
     let raw = null;
@@ -351,6 +380,10 @@ const Storage = (() => {
     FOUNDERS,
     MIN_FOUNDERS,
     EMOJI,
+    roster,
+    isGuest,
+    emojiOf,
+    addGuest,
     uid,
     load,
     save,
