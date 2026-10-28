@@ -50,7 +50,7 @@ Abre `index.html` en el navegador (doble clic).
 
 > **No uséis el menú ⋮ → Instalar app en Android.** Chrome (≤157) comprueba el dominio, no la carpeta: si ya hay otra app de `TU-USUARIO.github.io` instalada (p. ej. Hábitos), dice por error «Esta aplicación ya está instalada». El botón propio usa `beforeinstallprompt`, que sí mira la carpeta. Ver `Plantillas/PWA-Android-ya-instalada.md`.
 
-Funciona sin conexión gracias a `sw.js` (estrategia red primero: con internet siempre carga la última versión).
+Funciona sin conexión gracias a `sw.js` (estrategia red primero: con internet siempre carga la última versión). Al instalar una versión nueva descarga los archivos con `cache: 'reload'`, saltándose la caché HTTP de 10 min de GitHub Pages, para no meter archivos de la versión anterior en la copia nueva; y al activarse solo borra sus propias cachés (`catan-v…`), no las de las demás apps de `alexlobar.github.io`.
 Si añades un archivo nuevo a la app, inclúyelo en la lista `ASSETS` de `sw.js`.
 
 **Versión**: al publicar cambios, sube la versión en los cuatro sitios (deben coincidir): `VERSION` (y `BUILD_DATE`, la fecha de publicación) en `js/app.js`, `CACHE` en `sw.js` (siempre `catan-vX.Y.Z`), `data-build` en `index.html` y el `?v=` de cada `<script>`/`<link>` de `index.html`. El `?v=` evita que el móvil mezcle archivos nuevos y viejos (GitHub Pages deja cachearlos 10 min).

@@ -1,8 +1,8 @@
 // Arranque, navegación por pestañas, ajustes y utilidades comunes.
 const App = (() => {
   // Debe coincidir con CACHE en sw.js y data-build en index.html.
-  const VERSION = '1.12.3';
-  const BUILD_DATE = '2026-10-27';
+  const VERSION = '1.12.4';
+  const BUILD_DATE = '2026-10-28';
   const CACHE_PREFIX = 'catan-v';        // igual que CACHE en sw.js, sin la versión
   const DATA_PREFIX = 'catan';           // todas las claves de localStorage de esta app empiezan así
   const STORAGE_MAX = 5 * 1024 * 1024;   // tope de localStorage por dominio
