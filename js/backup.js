@@ -1,7 +1,8 @@
 // 📦 Copias de seguridad.
 //  · Automáticas (en el móvil, IndexedDB): al guardar/editar/borrar partidas, antes de importar
 //    o restaurar, y una vez al día al abrir la app. Solo se guardan las 2 últimas y se pueden restaurar.
-//  · Fuera del móvil: archivo JSON compartido (Drive, WhatsApp, correo…) o descargado. Cada
+//  · Fuera del móvil: archivo compartido desde el móvil (.txt con el JSON dentro: Drive,
+//    WhatsApp, correo…) o descargado en el ordenador (.json). Cada
 //    10 partidas nuevas sin copia, la app lo recuerda (si se borran los datos del navegador,
 //    las copias internas también se pierden: la buena es la de fuera).
 const Backup = (() => {
@@ -72,35 +73,49 @@ const Backup = (() => {
 
   const today = () => Stats.today();
 
-  function makeFile() {
-    const json = JSON.stringify(Storage.get(), null, 2);
-    return new File([json], `catan-copia-${today()}.json`, { type: 'application/json' });
-  }
-
-  function download(file) {
+  function download(name, content) {
+    const url = URL.createObjectURL(new Blob([content], { type: 'application/json' }));
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(file);
-    a.download = file.name;
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
     a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000); // en Safari/iOS revocarlo al instante cancela la descarga
-  }
-
-  // En el móvil abre la hoja de compartir (Drive, WhatsApp, correo…); si no se puede, descarga.
-  async function exportFile() {
-    const file = makeFile();
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      try {
-        await navigator.share({ files: [file], title: 'Copia de Catán Tracker' });
-        markExported();
-        App.toast('📦 Copia guardada');
-        return;
-      } catch (e) {
-        if (e.name === 'AbortError') return; // cancelado: no cuenta como copia
-      }
-    }
-    download(file);
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000); // en Safari/iOS revocarlo al instante cancela la descarga
     markExported();
     App.toast('📦 Copia descargada');
+  }
+
+  // En el móvil abre la hoja de compartir (Drive, WhatsApp, correo…); en el ordenador, descarga.
+  // Se llama DIRECTAMENTE desde el toque del botón: con una espera antes, el navegador lo
+  // bloquea (NotAllowedError). Reglas que han hecho falta para que llegue a Drive:
+  //  · Siempre .txt: Chrome Android no deja compartir .json (canShare dice que sí y luego falla).
+  //    Es el mismo JSON por dentro; Importar acepta .txt y .json.
+  //  · Solo el archivo, sin title ni text: con texto, Drive se queda con el texto y tira el archivo.
+  //  · Solo en pantallas táctiles: en Windows el menú de compartir no ofrece Drive.
+  function exportFile() {
+    const base = `catan-copia-${today()}`;
+    const content = JSON.stringify(Storage.get(), null, 2);
+    const touch = window.matchMedia && matchMedia('(pointer: coarse)').matches;
+
+    if (touch && navigator.share && navigator.canShare && typeof File === 'function') {
+      const file = new File([content], `${base}.txt`, { type: 'text/plain' });
+      let ok = false;
+      try { ok = navigator.canShare({ files: [file] }); } catch {}
+      if (ok) {
+        navigator.share({ files: [file] })
+          .then(() => {
+            markExported();
+            App.toast('📦 Copia guardada');
+          })
+          .catch(e => {
+            if (e && e.name === 'AbortError') return; // cerró el menú: no es un fallo ni cuenta como copia
+            download(`${base}.json`, content);
+          });
+        return;
+      }
+    }
+    download(`${base}.json`, content);
   }
 
   function markExported() {
